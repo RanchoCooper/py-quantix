@@ -1,13 +1,12 @@
 """
 In-memory event bus implementation.
 
-This module provides an in-memory implementation of the event bus interface.
+This module provides an in-memory implementation of the event bus.
 """
 import logging
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Type
 
-from domain.event.event import DomainEvent
-from domain.event.event_bus import EventBus, EventHandler
+from domain.event.base_event import Event, EventBus, EventHandler
 
 logger = logging.getLogger(__name__)
 
@@ -16,55 +15,54 @@ class MemoryEventBus(EventBus):
     """
     In-memory implementation of the event bus.
     
-    This implementation stores event handlers in memory and dispatches
-    events synchronously.
+    This class provides a simple implementation of the event bus that
+    keeps handlers in memory and publishes events synchronously.
     """
     
     def __init__(self):
-        """Initialize the event bus."""
-        self._handlers: Dict[str, List[EventHandler]] = {}
+        """Initialize an empty subscription map."""
+        self._handlers: Dict[Type[Event], List[EventHandler]] = {}
     
-    def publish(self, event: DomainEvent) -> None:
+    def publish(self, event: Event) -> None:
         """
-        Publish a domain event to all subscribers.
+        Publish an event to all subscribed handlers.
         
         Args:
-            event: The domain event to publish
+            event: The event to publish
         """
-        event_type = event.event_type
-        handlers = self.get_handlers(event_type)
+        event_type = type(event)
+        handlers = self._handlers.get(event_type, [])
         
         if not handlers:
-            logger.debug(f"No handlers registered for event type: {event_type}")
+            logger.debug(f"No handlers for event type {event_type.__name__}")
             return
         
-        logger.debug(f"Publishing event {event.event_id} of type {event_type} to {len(handlers)} handlers")
+        logger.debug(f"Publishing event {event_type.__name__} to {len(handlers)} handlers")
         
         for handler in handlers:
             try:
                 handler.handle(event)
             except Exception as e:
-                logger.exception(f"Error handling event {event.event_id} with handler {handler.__class__.__name__}: {e}")
+                logger.error(f"Error handling event {event_type.__name__} by {handler.__class__.__name__}: {str(e)}")
     
-    def subscribe(self, event_type: str, handler: EventHandler) -> None:
+    def subscribe(self, event_type: Type[Event], handler: EventHandler) -> None:
         """
-        Subscribe to a specific event type.
+        Subscribe a handler to an event type.
         
         Args:
             event_type: The type of event to subscribe to
-            handler: The handler to call when the event occurs
+            handler: The handler to call when the event is published
         """
         if event_type not in self._handlers:
             self._handlers[event_type] = []
         
-        # Avoid duplicate handlers
         if handler not in self._handlers[event_type]:
             self._handlers[event_type].append(handler)
-            logger.debug(f"Handler {handler.__class__.__name__} subscribed to event type: {event_type}")
+            logger.debug(f"Handler {handler.__class__.__name__} subscribed to event {event_type.__name__}")
     
-    def unsubscribe(self, event_type: str, handler: EventHandler) -> None:
+    def unsubscribe(self, event_type: Type[Event], handler: EventHandler) -> None:
         """
-        Unsubscribe from a specific event type.
+        Unsubscribe a handler from an event type.
         
         Args:
             event_type: The type of event to unsubscribe from
@@ -72,16 +70,8 @@ class MemoryEventBus(EventBus):
         """
         if event_type in self._handlers and handler in self._handlers[event_type]:
             self._handlers[event_type].remove(handler)
-            logger.debug(f"Handler {handler.__class__.__name__} unsubscribed from event type: {event_type}")
-    
-    def get_handlers(self, event_type: str) -> List[EventHandler]:
-        """
-        Get all handlers for a specific event type.
-        
-        Args:
-            event_type: The type of event to get handlers for
+            logger.debug(f"Handler {handler.__class__.__name__} unsubscribed from event {event_type.__name__}")
             
-        Returns:
-            A list of handlers for the given event type
-        """
-        return self._handlers.get(event_type, []) 
+            # Clean up empty lists
+            if not self._handlers[event_type]:
+                del self._handlers[event_type] 

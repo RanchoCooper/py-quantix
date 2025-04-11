@@ -12,32 +12,32 @@ from adapter.repository import db_registry
 
 class BaseSQLAlchemyRepository:
     """
-    基础SQLAlchemy仓储实现
+    Base SQLAlchemy repository implementation
     
-    提供基本的数据库操作和动态选择数据库的能力
+    Provides basic database operations and ability to dynamically select databases
     """
     
     def __init__(self, db_name=None):
         """
-        初始化仓储
+        Initialize repository
         
         Args:
-            db_name: 要使用的数据库名称，为None则使用默认数据库
+            db_name: Database name to use, uses default database if None
         """
         self._db_name = db_name
     
     @property
     def _session(self) -> Session:
         """
-        获取当前会话
+        Get current session
         
         Returns:
-            SQLAlchemy Session实例
+            SQLAlchemy Session instance
         """
         return db_registry.get_session(self._db_name)
     
     def _commit(self):
-        """提交事务"""
+        """Commit transaction"""
         try:
             self._session.commit()
         except SQLAlchemyError as e:
@@ -45,5 +45,5 @@ class BaseSQLAlchemyRepository:
             raise e
     
     def _rollback(self):
-        """回滚事务"""
+        """Rollback transaction"""
         self._session.rollback() 

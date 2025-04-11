@@ -1,150 +1,161 @@
 """
-SQLAlchemy-based Example repository implementation.
+SQLAlchemy Example repository implementation.
 
-This module provides a SQLAlchemy-based implementation of the Example repository.
+This module provides the SQLAlchemy-based implementation of the Example repository.
 """
-from typing import List, Optional
+import logging
+from typing import Dict, List, Optional
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, NoResultFound
 
-from adapter.repository.sqlalchemy.base_repository import BaseSQLAlchemyRepository
-from adapter.repository.sqlalchemy.models import ExampleModel
 from domain.model.example import Example
 from domain.repository.example_repository import ExampleRepository
+from adapter.repository.sqlalchemy.base_repository import BaseSQLAlchemyRepository
+from adapter.repository.sqlalchemy.models import ExampleModel
+
+logger = logging.getLogger(__name__)
 
 
 class SQLAlchemyExampleRepository(BaseSQLAlchemyRepository, ExampleRepository):
     """
-    SQLAlchemy-based implementation of the Example repository.
+    SQLAlchemy implementation of the Example repository.
     
-    This repository uses SQLAlchemy to persist Example entities to a
-    relational database.
+    This class provides a SQLAlchemy-based implementation of the Example repository
+    interface defined in the domain layer.
     """
-    
-    def __init__(self, db_name=None):
-        """
-        Initialize the repository.
-        
-        Args:
-            db_name: 要使用的数据库名称，为None则使用默认数据库
-        """
-        super().__init__(db_name)
     
     def save(self, example: Example) -> Example:
         """
-        Save an example to the repository.
+        Save an example to the database.
         
         Args:
-            example: The example entity to save
+            example: The example to save
             
         Returns:
-            The saved example with any updates
+            The saved example
+            
+        Raises:
+            ValueError: If an example with the same name already exists
         """
         try:
-            # Check if the example already exists
-            existing_model = self._session.query(ExampleModel).filter_by(id=example.id).first()
+            # Convert domain entity to ORM model
+            example_model = self._to_model(example)
             
-            if existing_model:
-                # Update the existing model
-                existing_model.name = example.name
-                existing_model.description = example.description
-                existing_model.updated_at = example.updated_at
-            else:
-                # Create a new model
-                model = ExampleModel(
-                    id=example.id,
-                    name=example.name,
-                    description=example.description,
-                    created_at=example.created_at,
-                    updated_at=example.updated_at
-                )
-                self._session.add(model)
+            # Add to session
+            self._session.add(example_model)
             
+            # Commit transaction
             self._commit()
+            
+            logger.info(f"Example saved: {example.id}")
             return example
-        except SQLAlchemyError as e:
+        except IntegrityError as e:
             self._rollback()
-            raise e
+            logger.error(f"Error saving example: {str(e)}")
+            if "Duplicate entry" in str(e) and "name" in str(e):
+                raise ValueError(f"Example with name '{example.name}' already exists")
+            raise
     
     def find_by_id(self, example_id: str) -> Optional[Example]:
         """
-        Find an example by its ID.
+        Find an example by ID.
         
         Args:
             example_id: The ID of the example to find
             
         Returns:
-            The found example entity or None if not found
+            The found example or None if not found
         """
-        model = self._session.query(ExampleModel).filter_by(id=example_id).first()
-        return self._to_entity(model) if model else None
+        try:
+            example_model = self._session.query(ExampleModel).filter(
+                ExampleModel.id == example_id
+            ).one()
+            return self._to_entity(example_model)
+        except NoResultFound:
+            logger.info(f"Example not found: {example_id}")
+            return None
     
     def find_by_name(self, name: str) -> Optional[Example]:
         """
-        Find an example by its name.
+        Find an example by name.
         
         Args:
             name: The name of the example to find
             
         Returns:
-            The found example entity or None if not found
+            The found example or None if not found
         """
-        model = self._session.query(ExampleModel).filter_by(name=name).first()
-        return self._to_entity(model) if model else None
+        try:
+            example_model = self._session.query(ExampleModel).filter(
+                ExampleModel.name == name
+            ).one()
+            return self._to_entity(example_model)
+        except NoResultFound:
+            logger.info(f"Example not found with name: {name}")
+            return None
     
     def find_all(self) -> List[Example]:
         """
-        Find all examples in the repository.
+        Find all examples.
         
         Returns:
-            A list of all example entities
+            A list of all examples
         """
-        models = self._session.query(ExampleModel).all()
-        return [self._to_entity(model) for model in models]
+        example_models = self._session.query(ExampleModel).all()
+        return [self._to_entity(model) for model in example_models]
     
     def delete(self, example_id: str) -> bool:
         """
-        Delete an example from the repository.
+        Delete an example by ID.
         
         Args:
             example_id: The ID of the example to delete
             
         Returns:
-            True if the example was deleted, False otherwise
+            True if the example was deleted, False if not found
         """
         try:
-            model = self._session.query(ExampleModel).filter_by(id=example_id).first()
-            if not model:
-                return False
-            
-            self._session.delete(model)
+            result = self._session.query(ExampleModel).filter(
+                ExampleModel.id == example_id
+            ).delete()
             self._commit()
-            return True
-        except SQLAlchemyError as e:
+            
+            deleted = result > 0
+            if deleted:
+                logger.info(f"Example deleted: {example_id}")
+            else:
+                logger.info(f"Example not found for deletion: {example_id}")
+            return deleted
+        except Exception as e:
             self._rollback()
-            raise e
+            logger.error(f"Error deleting example: {str(e)}")
+            raise
     
-    def exists_by_name(self, name: str) -> bool:
+    def _to_model(self, example: Example) -> ExampleModel:
         """
-        Check if an example with the given name exists.
+        Convert a domain entity to an ORM model.
         
         Args:
-            name: The name to check
+            example: The domain entity to convert
             
         Returns:
-            True if an example with the given name exists, False otherwise
+            The ORM model
         """
-        return self._session.query(ExampleModel).filter_by(name=name).first() is not None
+        return ExampleModel(
+            id=example.id,
+            name=example.name,
+            description=example.description
+        )
     
     def _to_entity(self, model: ExampleModel) -> Example:
         """
-        Convert a database model to a domain entity.
+        Convert an ORM model to a domain entity.
         
         Args:
-            model: The database model to convert
+            model: The ORM model to convert
             
         Returns:
-            The corresponding domain entity
+            The domain entity
         """
         return Example(
             id=model.id,

@@ -1,8 +1,7 @@
 """
-Example domain service.
+Example service interface.
 
-This module defines the domain service for the Example entity. Domain services
-contain domain logic that doesn't naturally fit within an entity or value object.
+This module defines the interface for example services.
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional
@@ -12,10 +11,9 @@ from domain.model.example import Example
 
 class ExampleService(ABC):
     """
-    Domain service for the Example entity.
+    Interface for example services.
     
-    This service contains domain logic that doesn't naturally fit within the
-    Example entity or related value objects.
+    This abstract class defines the operations for managing examples.
     """
     
     @abstractmethod
@@ -25,33 +23,49 @@ class ExampleService(ABC):
         
         Args:
             name: The name of the example
-            description: Optional description of the example
+            description: The description of the example
             
         Returns:
             The created example
+        """
+        pass
+    
+    @abstractmethod
+    def get_example(self, example_id: str) -> Example:
+        """
+        Get an example by ID.
+        
+        Args:
+            example_id: The ID of the example to get
             
-        Raises:
-            ExampleNameAlreadyExistsError: If an example with the given name already exists
+        Returns:
+            The found example
+        """
+        pass
+    
+    @abstractmethod
+    def get_all_examples(self) -> List[Example]:
+        """
+        Get all examples.
+        
+        Returns:
+            A list of all examples
         """
         pass
     
     @abstractmethod
     def update_example(self, example_id: str, name: Optional[str] = None, 
-                      description: Optional[str] = None) -> Example:
+                       description: Optional[str] = None) -> Example:
         """
-        Update an existing example.
+        Update an example.
         
         Args:
             example_id: The ID of the example to update
-            name: The new name of the example (if provided)
-            description: The new description of the example (if provided)
+            name: The new name of the example
+            description: The new description of the example
             
         Returns:
             The updated example
-            
-        Raises:
-            EntityNotFoundError: If the example with the given ID doesn't exist
-            ExampleNameAlreadyExistsError: If the new name is already used by another example
         """
         pass
     
@@ -64,32 +78,6 @@ class ExampleService(ABC):
             example_id: The ID of the example to delete
             
         Returns:
-            True if the example was deleted, False if it didn't exist
-        """
-        pass
-    
-    @abstractmethod
-    def get_example(self, example_id: str) -> Example:
-        """
-        Get an example by its ID.
-        
-        Args:
-            example_id: The ID of the example to get
-            
-        Returns:
-            The found example
-            
-        Raises:
-            EntityNotFoundError: If the example with the given ID doesn't exist
-        """
-        pass
-    
-    @abstractmethod
-    def get_all_examples(self) -> List[Example]:
-        """
-        Get all examples.
-        
-        Returns:
-            A list of all examples
+            True if the example was deleted, False if not found
         """
         pass 

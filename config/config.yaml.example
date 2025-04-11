@@ -5,18 +5,18 @@ flask:
   JSON_AS_ASCII: false
 
 db:
-  # 默认数据库连接，可选 'mysql' 或 'postgresql'
+  # Default database connection, options: 'mysql' or 'postgresql'
   default: mysql
   
-  # 为不同领域服务指定数据库
-  examples_db: mysql
+  # Specify databases for different domain services
+  # examples_db: mysql
   
-  # MySQL配置
+  # MySQL configuration
   mysql:
-    url: mysql+pymysql://root:mysqlroot@localhost:3306/py_hexagonal
+    url: mysql+pymysql://root:mysqlroot@localhost:3306/py_quantix
     echo: false
   
-  # PostgreSQL配置
+  # PostgreSQL configuration
   postgresql:
     url: postgresql+psycopg2://postgres:postgres@localhost:5432/postgres
     echo: false
@@ -25,7 +25,7 @@ redis:
   host: localhost
   port: 6379
   db: 0
-  prefix: app:py_hexagonal:
+  prefix: app:py_quantix
 
 logging:
   level: INFO

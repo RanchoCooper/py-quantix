@@ -1,33 +1,24 @@
 """
-Flask resources registration.
+Flask application resources.
 
-This module provides functions to register API resources with the Flask application.
+This module provides functions to register resources with a Flask-RESTful API.
 """
 import logging
+from typing import Optional
 
 from flask_restful import Api
-
-from adapter.http.resources.example_resource import ExampleListResource, ExampleResource
 
 logger = logging.getLogger(__name__)
 
 
-def register_resources(api, example_app_service=None):
+def register_resources(api: Api):
     """
-    Register API resources with the Flask-RESTful API.
+    Register RESTful resources with the Flask API.
     
     Args:
-        api: Flask-RESTful API instance
-        example_app_service: Example application service instance
+        api: The Flask-RESTful API instance
     """
-    # Example resources
-    api.add_resource(
-        ExampleListResource,
-        '/api/examples',
-        resource_class_kwargs={'example_app_service': example_app_service}
-    )
-    api.add_resource(
-        ExampleResource, 
-        '/api/examples/<string:example_id>',
-        resource_class_kwargs={'example_app_service': example_app_service}
-    ) 
+    # 注册资源到API
+    # 在这里添加所有需要的API资源
+    
+    logger.info("API resources registered successfully")

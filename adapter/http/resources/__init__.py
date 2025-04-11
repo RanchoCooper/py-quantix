@@ -1,1 +1,5 @@
-"""HTTP resources for the REST API.""" 
+"""
+HTTP resources package.
+
+This package contains HTTP resource adapters for the application.
+""" 

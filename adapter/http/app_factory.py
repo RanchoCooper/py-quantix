@@ -33,7 +33,7 @@ def create_app(config=None, register_resources_func=None):
     app.config.from_mapping(
         DEBUG=False,
         TESTING=False,
-        JSON_AS_ASCII=False,  # 允许非ASCII字符直接显示，不转为Unicode转义序列
+        JSON_AS_ASCII=False,  # Allow non-ASCII characters to display directly, not as Unicode escape sequences
     )
     
     if config:
@@ -48,7 +48,7 @@ def create_app(config=None, register_resources_func=None):
     # Create API
     api = Api(app)
     
-    # 配置Flask-RESTful以正确处理中文
+    # Configure Flask-RESTful to handle Chinese characters correctly
     @api.representation('application/json')
     def output_json(data, code, headers=None):
         import json
