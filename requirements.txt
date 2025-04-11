@@ -1,0 +1,13 @@
+flask==2.3.3
+flask-restful==0.3.10
+flask-sqlalchemy==3.0.5
+sqlalchemy==2.0.20
+pydantic==2.3.0
+redis==5.0.0
+pytest==7.4.0
+pytest-cov==4.1.0
+pymysql==1.1.0
+psycopg2-binary==2.9.7
+dependency-injector==4.46.0
+marshmallow==3.20.1
+python-dotenv==1.0.0 
