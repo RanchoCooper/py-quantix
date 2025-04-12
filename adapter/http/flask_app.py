@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 def register_resources(api: Api):
     """
     Register RESTful resources with the Flask API.
-    
+
     Args:
         api: The Flask-RESTful API instance
     """
-    # 注册资源到API
-    # 在这里添加所有需要的API资源
-    
+    # Register resources to API
+    # Add all required API resources here
+
     logger.info("API resources registered successfully")

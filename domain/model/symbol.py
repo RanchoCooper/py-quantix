@@ -63,7 +63,10 @@ class Symbol:
         if price_filter and price_filter.tick_size:
             tick_size_str = str(price_filter.tick_size)
             if "." in tick_size_str:
-                return len(tick_size_str.split(".")[1].rstrip("0"))
+                # Split the string into integer and decimal parts
+                decimal_part = tick_size_str.split(".")[1]
+                # Precision is the length of decimal part minus trailing zeros
+                return len(decimal_part.rstrip("0"))
         return 8  # Default precision
 
     def get_quantity_precision(self) -> int:

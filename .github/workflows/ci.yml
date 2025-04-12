@@ -41,13 +41,24 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-    
+
+    # - name: Install TA-Lib system dependencies
+    #   run: |
+    #     sudo apt-get update
+    #     sudo apt-get install -y build-essential wget
+    #     wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+    #     tar -xvzf ta-lib-0.4.0-src.tar.gz
+    #     cd ta-lib
+    #     ./configure --prefix=/usr
+    #     make
+    #     sudo make install
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -55,21 +66,21 @@ jobs:
         python -m pip install --upgrade wheel
         pip install pytest pytest-cov isort
         pip install -r requirements.txt
-    
+
     # - name: Check import ordering with isort
     #   run: |
     #     isort --check-only --profile black .
-    
+
     - name: Copy example config
       run: |
         cp config/config.yaml.example config/config.yaml
-    
+
     - name: Run tests with pytest
       run: |
         pytest --cov --cov-branch --cov-report=xml
       env:
         PYTHONPATH: .
-        
+
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v5
       with:
