@@ -7,15 +7,15 @@ flask:
 db:
   # Default database connection, options: 'mysql' or 'postgresql'
   default: mysql
-  
+
   # Specify databases for different domain services
   # examples_db: mysql
-  
+
   # MySQL configuration
   mysql:
     url: mysql+pymysql://root:mysqlroot@localhost:3306/py_quantix
     echo: false
-  
+
   # PostgreSQL configuration
   postgresql:
     url: postgresql+psycopg2://postgres:postgres@localhost:5432/postgres
@@ -27,6 +27,12 @@ redis:
   db: 0
   prefix: app:py_quantix
 
+exchange:
+  binance:
+    api_key: ""  # Your Binance API key
+    api_secret: ""  # Your Binance API secret
+    testnet: true  # Use Binance testnet (true) or production (false)
+
 logging:
   level: INFO
-  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s' 
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

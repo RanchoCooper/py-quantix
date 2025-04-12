@@ -20,6 +20,7 @@ py-quantix/
 │   ├── cache/       # Cache implementations (Redis)
 │   ├── di/          # Dependency injection container
 │   ├── event/       # Event bus implementations
+│   ├── exchange/    # Exchange API implementations (Binance)
 │   ├── http/        # HTTP/REST API (Flask)
 │   └── repository/  # Data persistence (SQLAlchemy)
 ├── config/          # Configuration files
@@ -54,7 +55,7 @@ py-quantix/
 4. Configure the application:
    ```
    cp config/config.yaml.example config/config.yaml
-   # Edit config.yaml with your database and Redis settings
+   # Edit config.yaml with your database, Redis, and Binance API settings
    ```
 
 ### Running the Application
@@ -76,7 +77,30 @@ The application is configured through `config/config.yaml`. Key configuration se
 - **flask**: HTTP server configuration
 - **db**: Database settings for MySQL and PostgreSQL
 - **redis**: Cache configuration
+- **exchange**: Exchange API settings (Binance)
 - **logging**: Logging levels and formats
+
+## Exchange API Support
+The system supports cryptocurrency exchange integrations through a standardized port interface. Currently supported exchanges:
+
+### Binance
+To use the Binance exchange API:
+
+1. Configure your API credentials in `config/config.yaml`:
+   ```yaml
+   exchange:
+     binance:
+       api_key: "your_api_key"
+       api_secret: "your_api_secret"
+       testnet: true  # Use testnet for testing
+   ```
+
+2. Run the Binance example script:
+   ```
+   python entry/binance_example.py
+   ```
+
+This script demonstrates fetching market data, getting account information, and more from the Binance API.
 
 ## Database Support
 The system supports both MySQL and PostgreSQL. The default database can be configured in the `config.yaml` file.
@@ -88,4 +112,4 @@ pytest
 ```
 
 ## License
-[MIT License](LICENSE) 
+[MIT License](LICENSE)
