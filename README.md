@@ -1,5 +1,8 @@
 # Py-Quantix: Hexagonal Architecture Quantitative Trading System
 
+![CI Status](https://github.com/RanchoCooper/py-quantix/actions/workflows/ci.yml/badge.svg)
+[![codecov](https://codecov.io/gh/RanchoCooper/py-quantix/branch/main/graph/badge.svg)](https://codecov.io/gh/RanchoCooper/py-quantix)
+
 ## Overview
 Py-Quantix is a robust quantitative trading system built using Hexagonal Architecture (also known as Ports and Adapters pattern). This architecture enables clean separation of business logic from technical implementations, making the system highly maintainable, testable, and adaptable to changing requirements.
 
