@@ -20,6 +20,14 @@ def test_auto_mode():
     # 设置日志
     setup_logger("INFO")
 
+    # 初始化交易引擎（自动模式）
+    engine = TradingEngine("config/config.json", mode="auto")
+
+    # 为测试目的手动设置一个交易对
+    symbol = "BNBUSDT"
+    engine.last_signals[symbol] = None
+    engine.positions[symbol] = {}
+
     # 创建一个模拟信号用于测试
     mock_signal = {
         "action": "buy",
@@ -28,11 +36,8 @@ def test_auto_mode():
         "position_size": 0.001
     }
 
-    # 初始化交易引擎（自动模式）
-    engine = TradingEngine("config/config.json", mode="auto")
-
     # 测试执行交易（在自动模式下应该尝试下单）
-    result = engine._execute_trade(mock_signal)
+    result = engine._execute_trade(symbol, mock_signal)
     print(f"自动模式交易执行结果: {result}")
     print("在自动模式下，系统会尝试执行实际交易订单。")
     print()
@@ -45,6 +50,14 @@ def test_monitor_mode():
     # 设置日志
     setup_logger("INFO")
 
+    # 初始化交易引擎（监控模式）
+    engine = TradingEngine("config/config.json", mode="monitor")
+
+    # 为测试目的手动设置一个交易对
+    symbol = "BNBUSDT"
+    engine.last_signals[symbol] = None
+    engine.positions[symbol] = {}
+
     # 创建一个模拟信号用于测试
     mock_signal = {
         "action": "sell",
@@ -53,11 +66,8 @@ def test_monitor_mode():
         "position_size": 0.001
     }
 
-    # 初始化交易引擎（监控模式）
-    engine = TradingEngine("config/config.json", mode="monitor")
-
     # 测试执行交易（在监控模式下应该只发送通知，不实际下单）
-    result = engine._execute_trade(mock_signal)
+    result = engine._execute_trade(symbol, mock_signal)
     print(f"监控模式交易执行结果: {result}")
     print("在监控模式下，系统只会发送通知，不会执行实际交易订单。")
     print()

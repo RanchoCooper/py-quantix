@@ -166,10 +166,15 @@ def test_dingtalk_notifier():
     # 导入测试函数
     import subprocess
     import sys
+    import os
+
+    # 获取当前脚本所在目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    test_script_path = os.path.join(current_dir, "test_dingtalk.py")
 
     # 运行钉钉通知器的独立测试
-    result = subprocess.run([sys.executable, "test_dingtalk.py"],
-                          capture_output=True, text=True, cwd=".")
+    result = subprocess.run([sys.executable, test_script_path],
+                          capture_output=True, text=True, cwd=current_dir)
 
     # 检查测试是否成功运行
     if result.returncode == 0:
