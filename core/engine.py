@@ -13,6 +13,14 @@ class TradingEngine:
     """
     主交易引擎，集成策略、API连接器和通知系统
     支持多币种交易，每个币种可以使用不同的策略
+    
+    交易引擎是整个量化交易系统的核心组件，负责协调各个模块的工作：
+    1. 从配置文件加载设置
+    2. 初始化币安期货客户端
+    3. 初始化钉钉通知器
+    4. 为每个交易对初始化对应的策略
+    5. 获取市场数据并评估策略
+    6. 根据运行模式执行交易或仅监控
     """
 
     def __init__(self, config_path: str = "config/config.json", mode: str = "auto"):
@@ -20,8 +28,21 @@ class TradingEngine:
         初始化交易引擎
 
         Args:
-            config_path: 配置文件路径
-            mode: 运行模式 ("auto" 或 "monitor")
+            config_path (str, optional): 配置文件路径. 默认为 "config/config.json".
+            mode (str, optional): 运行模式 ("auto" 或 "monitor"). 默认为 "auto".
+            
+        Attributes:
+            config (Dict[str, Any]): 配置信息
+            mode (str): 运行模式
+            client (BinanceFuturesClient): 币安期货客户端实例
+            notifier (DingTalkNotifier): 钉钉通知器实例
+            strategies (Dict[str, Any]): 交易对与策略实例的映射
+            last_signals (Dict[str, Any]): 存储每个交易对的最后信号
+            positions (Dict[str, Any]): 存储每个交易对的持仓信息
+            
+        Example:
+            >>> engine = TradingEngine(config_path="config/config.json", mode="auto")
+            >>> logger.info("交易引擎初始化成功")
         """
         self.config = self._load_config(config_path)
         self.mode = mode  # 运行模式
@@ -39,10 +60,19 @@ class TradingEngine:
         从JSON文件加载配置
 
         Args:
-            config_path: 配置文件路径
+            config_path (str): 配置文件路径
 
         Returns:
-            配置字典
+            Dict[str, Any]: 配置字典
+            
+        Raises:
+            FileNotFoundError: 当配置文件不存在时抛出
+            json.JSONDecodeError: 当配置文件格式不正确时抛出
+            
+        Example:
+            >>> config = self._load_config("config/config.json")
+            >>> print(config['binance']['api_key'])
+            your_api_key
         """
         try:
             with open(config_path, 'r') as f:
@@ -58,7 +88,11 @@ class TradingEngine:
         初始化币安期货客户端，并为所有交易对设置杠杆
 
         Returns:
-            BinanceFuturesClient实例
+            BinanceFuturesClient: BinanceFuturesClient实例
+            
+        Example:
+            >>> client = self._init_binance_client()
+            >>> logger.info("币安客户端初始化成功")
         """
         binance_config = self.config['binance']
         client = BinanceFuturesClient(
@@ -86,7 +120,11 @@ class TradingEngine:
         初始化钉钉通知器
 
         Returns:
-            DingTalkNotifier实例
+            DingTalkNotifier: DingTalkNotifier实例
+            
+        Example:
+            >>> notifier = self._init_notifier()
+            >>> logger.info("钉钉通知器初始化成功")
         """
         notify_config = self.config['notifications']['dingtalk']
         return DingTalkNotifier(
@@ -99,7 +137,12 @@ class TradingEngine:
         为每个交易对初始化对应的交易策略
 
         Returns:
-            包含交易对和策略实例映射的字典
+            Dict[str, Any]: 包含交易对和策略实例映射的字典
+            
+        Example:
+            >>> strategies = self._init_strategies()
+            >>> print(len(strategies))
+            3
         """
         strategies = {}
         trading_symbols = self.config['trading']['symbols']
@@ -130,12 +173,17 @@ class TradingEngine:
         从币安获取市场数据(K线)
 
         Args:
-            symbol: 交易对符号
-            interval: K线间隔
-            limit: 获取K线数量
+            symbol (str): 交易对符号
+            interval (str, optional): K线间隔. 默认为 "1h".
+            limit (int, optional): 获取K线数量. 默认为 100.
 
         Returns:
-            K线列表
+            list: K线列表
+            
+        Example:
+            >>> klines = self._get_market_data("BTCUSDT", interval="1h", limit=100)
+            >>> print(len(klines))
+            100
         """
         try:
             klines = self.client.get_klines(
@@ -153,11 +201,16 @@ class TradingEngine:
         根据信号执行交易
 
         Args:
-            symbol: 交易对符号
-            signal: 来自策略的交易信号
+            symbol (str): 交易对符号
+            signal (Dict[str, Any]): 来自策略的交易信号
 
         Returns:
-            表示成功的布尔值
+            bool: 表示执行是否成功的布尔值
+            
+        Example:
+            >>> success = self._execute_trade("BTCUSDT", signal)
+            >>> if success:
+            ...     logger.info("交易执行成功")
         """
         if signal['action'] == 'hold':
             return True
@@ -219,10 +272,15 @@ class TradingEngine:
         使用最新市场数据评估指定交易对的策略
 
         Args:
-            symbol: 交易对符号
+            symbol (str): 交易对符号
 
         Returns:
-            策略评估结果
+            Dict[str, Any]: 策略评估结果
+            
+        Example:
+            >>> signal = self.evaluate_strategy("BTCUSDT")
+            >>> print(signal['action'])
+            hold
         """
         try:
             # 获取市场数据
@@ -249,7 +307,12 @@ class TradingEngine:
         评估所有交易对的策略
 
         Returns:
-            包含所有交易对策略信号的字典
+            Dict[str, Dict[str, Any]]: 包含所有交易对策略信号的字典
+            
+        Example:
+            >>> signals = self.evaluate_all_strategies()
+            >>> for symbol, signal in signals.items():
+            ...     print(f"{symbol}: {signal['action']}")
         """
         signals = {}
         for symbol in self.strategies.keys():
@@ -261,7 +324,12 @@ class TradingEngine:
         运行一次交易循环（为向后兼容保留）
 
         Returns:
-            表示成功的布尔值
+            bool: 表示执行是否成功的布尔值
+            
+        Example:
+            >>> success = self.run_once()
+            >>> if success:
+            ...     logger.info("交易循环执行成功")
         """
         # 如果只有一个交易对，则使用原来的逻辑
         if len(self.strategies) == 1:
@@ -276,10 +344,15 @@ class TradingEngine:
         为指定交易对运行一次交易循环
 
         Args:
-            symbol: 交易对符号
+            symbol (str): 交易对符号
 
         Returns:
-            表示成功的布尔值
+            bool: 表示执行是否成功的布尔值
+            
+        Example:
+            >>> success = self.run_once_for_symbol("BTCUSDT")
+            >>> if success:
+            ...     logger.info("BTCUSDT交易循环执行成功")
         """
         try:
             # 评估策略
@@ -313,7 +386,12 @@ class TradingEngine:
         为所有交易对运行一次交易循环
 
         Returns:
-            表示成功的布尔值
+            bool: 表示执行是否成功的布尔值
+            
+        Example:
+            >>> success = self.run_once_for_all_symbols()
+            >>> if success:
+            ...     logger.info("所有交易对交易循环执行成功")
         """
         success = True
         signals = self.evaluate_all_strategies()
@@ -348,7 +426,11 @@ class TradingEngine:
         持续运行交易引擎
 
         Args:
-            interval: 每次循环之间的秒数
+            interval (int, optional): 每次循环之间的秒数. 默认为 3600.
+            
+        Example:
+            >>> # 持续运行，每小时检查一次
+            >>> self.run_continuously(interval=3600)
         """
         logger.info(f"开始持续运行交易引擎，间隔 {interval} 秒")
 
