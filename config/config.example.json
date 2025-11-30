@@ -1,0 +1,53 @@
+{
+    "binance": {
+        "api_key": "your_binance_api_key",
+        "api_secret": "your_binance_api_secret",
+        "testnet": true
+    },
+    "trading": {
+        "symbols": {
+            "BNBUSDT": {
+                "leverage": 10,
+                "position_size": 0.001,
+                "strategy": "trend_following",
+                "strategy_params": {
+                    "period": 14,
+                    "multiplier": 2
+                }
+            },
+            "BTCUSDT": {
+                "leverage": 5,
+                "position_size": 0.001,
+                "strategy": "mean_reversion",
+                "strategy_params": {
+                    "period": 20,
+                    "std_dev_multiplier": 2
+                }
+            }
+        }
+    },
+    "strategies": {
+        "trend_following": {
+            "period": 14,
+            "multiplier": 2
+        },
+        "mean_reversion": {
+            "period": 20,
+            "std_dev_multiplier": 2
+        },
+        "turtle_trading": {
+            "entry_period": 20,
+            "exit_period": 10
+        }
+    },
+    "notifications": {
+        "dingtalk": {
+            "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=your_token",
+            "secret": "your_secret"
+        }
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "logs/trading.log"
+    }
+}
