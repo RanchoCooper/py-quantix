@@ -10,28 +10,28 @@ from loguru import logger
 
 class BinanceFuturesClient:
     """
-    币安期货API客户端，用于量化交易
-    
-    该类封装了与币安期货API交互所需的所有功能，包括账户信息查询、
+    币安合约API客户端，用于量化交易
+
+    该类封装了与币安合约API交互所需的所有功能，包括账户信息查询、
     K线数据获取、订单下单等操作。支持实盘和测试网环境切换。
     """
 
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
         """
-        初始化币安期货客户端
+        初始化币安合约客户端
 
         Args:
             api_key (str): 币安API密钥，用于身份验证
             api_secret (str): 币安API密钥，用于请求签名
             testnet (bool, optional): 是否使用测试网环境. 默认为 True.
-            
+
         Attributes:
             api_key (str): API密钥
             api_secret (str): API密钥
             testnet (bool): 是否使用测试网
             base_url (str): API基础URL
             session (requests.Session): HTTP会话对象
-            
+
         Example:
             >>> client = BinanceFuturesClient("your_api_key", "your_api_secret", testnet=True)
             >>> logger.info("客户端初始化成功")
@@ -50,7 +50,7 @@ class BinanceFuturesClient:
             "X-MBX-APIKEY": self.api_key
         })
 
-        logger.info(f"币安期货客户端初始化完成. 测试网: {testnet}")
+        logger.info(f"币安合约客户端初始化完成. 测试网: {testnet}")
 
     def _generate_signature(self, params: Dict[str, Any]) -> str:
         """
@@ -61,7 +61,7 @@ class BinanceFuturesClient:
 
         Returns:
             str: 生成的十六进制签名字符串
-            
+
         Note:
             该方法是内部方法，用于为需要签名的API请求生成必要的认证签名。
             参数字典会被编码为URL查询字符串，然后使用HMAC SHA256算法签名。
@@ -85,10 +85,10 @@ class BinanceFuturesClient:
 
         Returns:
             Dict[str, Any]: API响应的JSON数据
-            
+
         Raises:
             requests.exceptions.RequestException: 当HTTP请求失败时抛出
-            
+
         Example:
             >>> response = self._send_request("GET", "/fapi/v2/ping")
             >>> print(response)
@@ -118,7 +118,7 @@ class BinanceFuturesClient:
 
         Returns:
             Dict[str, Any]: 包含账户详细信息的字典
-            
+
         Example:
             >>> account_info = client.get_account_info()
             >>> print(account_info['assets'][0])
@@ -132,7 +132,7 @@ class BinanceFuturesClient:
 
         Returns:
             Dict[str, Any]: 包含各资产余额信息的列表
-            
+
         Example:
             >>> balance = client.get_balance()
             >>> print(balance[0])
@@ -146,7 +146,7 @@ class BinanceFuturesClient:
 
         Returns:
             Dict[str, Any]: 包含当前持仓信息的列表
-            
+
         Example:
             >>> positions = client.get_positions()
             >>> print(positions[0])
@@ -165,7 +165,7 @@ class BinanceFuturesClient:
 
         Returns:
             Dict[str, Any]: K线数据列表，每个元素包含开盘价、最高价、最低价、收盘价等信息
-            
+
         Example:
             >>> klines = client.get_klines("BTCUSDT", "1h", limit=100)
             >>> print(len(klines))
@@ -197,7 +197,7 @@ class BinanceFuturesClient:
 
         Returns:
             Dict[str, Any]: 订单信息
-            
+
         Example:
             >>> order = client.place_order(
             ...     symbol="BTCUSDT",
@@ -234,7 +234,7 @@ class BinanceFuturesClient:
 
         Returns:
             Dict[str, Any]: 响应信息
-            
+
         Example:
             >>> response = client.set_leverage("BTCUSDT", 10)
             >>> print(response['leverage'])
@@ -255,7 +255,7 @@ class BinanceFuturesClient:
 
         Returns:
             Dict[str, Any]: 交易对信息，包括价格精度、数量精度、交易限制等
-            
+
         Example:
             >>> symbol_info = client.get_symbol_info("BTCUSDT")
             >>> print(symbol_info['symbols'][0]['symbol'])

@@ -81,18 +81,40 @@ class ConfigManager:
                 logger.error(f"binance配置中缺少必需字段: {field}")
                 return False
 
-        # 验证trading部分
-        trading_required = ['symbol', 'leverage', 'position_size', 'strategy']
-        for field in trading_required:
-            if field not in config['trading']:
-                logger.error(f"trading配置中缺少必需字段: {field}")
+        # 验证trading部分 - 支持两种格式
+        # 格式1: 单个交易对配置 (旧格式)
+        # 格式2: 多个交易对配置 (新格式)
+        if 'symbols' in config['trading']:
+            # 新格式 - 验证每个交易对的配置
+            if not isinstance(config['trading']['symbols'], dict):
+                logger.error("trading.symbols 必须是一个对象")
                 return False
+                
+            for symbol, symbol_config in config['trading']['symbols'].items():
+                symbol_required = ['leverage', 'position_size', 'strategy']
+                for field in symbol_required:
+                    if field not in symbol_config:
+                        logger.error(f"交易对 {symbol} 的配置中缺少必需字段: {field}")
+                        return False
+                        
+                # 验证选择的策略存在
+                strategy = symbol_config['strategy']
+                if strategy not in config['strategies']:
+                    logger.error(f"交易对 {symbol} 选择的策略 '{strategy}' 在策略配置中未找到")
+                    return False
+        else:
+            # 旧格式 - 单个交易对配置
+            trading_required = ['symbol', 'leverage', 'position_size', 'strategy']
+            for field in trading_required:
+                if field not in config['trading']:
+                    logger.error(f"trading配置中缺少必需字段: {field}")
+                    return False
 
-        # 验证选择的策略存在
-        strategy = config['trading']['strategy']
-        if strategy not in config['strategies']:
-            logger.error(f"选择的策略 '{strategy}' 在策略配置中未找到")
-            return False
+            # 验证选择的策略存在
+            strategy = config['trading']['strategy']
+            if strategy not in config['strategies']:
+                logger.error(f"选择的策略 '{strategy}' 在策略配置中未找到")
+                return False
 
         # 验证notifications部分
         if 'dingtalk' not in config['notifications']:

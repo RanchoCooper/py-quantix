@@ -13,10 +13,10 @@ class TradingEngine:
     """
     主交易引擎，集成策略、API连接器和通知系统
     支持多币种交易，每个币种可以使用不同的策略
-    
+
     交易引擎是整个量化交易系统的核心组件，负责协调各个模块的工作：
     1. 从配置文件加载设置
-    2. 初始化币安期货客户端
+    2. 初始化币安合约客户端
     3. 初始化钉钉通知器
     4. 为每个交易对初始化对应的策略
     5. 获取市场数据并评估策略
@@ -30,16 +30,16 @@ class TradingEngine:
         Args:
             config_path (str, optional): 配置文件路径. 默认为 "config/config.json".
             mode (str, optional): 运行模式 ("auto" 或 "monitor"). 默认为 "auto".
-            
+
         Attributes:
             config (Dict[str, Any]): 配置信息
             mode (str): 运行模式
-            client (BinanceFuturesClient): 币安期货客户端实例
+            client (BinanceFuturesClient): 币安合约客户端实例
             notifier (DingTalkNotifier): 钉钉通知器实例
             strategies (Dict[str, Any]): 交易对与策略实例的映射
             last_signals (Dict[str, Any]): 存储每个交易对的最后信号
             positions (Dict[str, Any]): 存储每个交易对的持仓信息
-            
+
         Example:
             >>> engine = TradingEngine(config_path="config/config.json", mode="auto")
             >>> logger.info("交易引擎初始化成功")
@@ -64,11 +64,11 @@ class TradingEngine:
 
         Returns:
             Dict[str, Any]: 配置字典
-            
+
         Raises:
             FileNotFoundError: 当配置文件不存在时抛出
             json.JSONDecodeError: 当配置文件格式不正确时抛出
-            
+
         Example:
             >>> config = self._load_config("config/config.json")
             >>> print(config['binance']['api_key'])
@@ -85,11 +85,11 @@ class TradingEngine:
 
     def _init_binance_client(self) -> BinanceFuturesClient:
         """
-        初始化币安期货客户端，并为所有交易对设置杠杆
+        初始化币安合约客户端，并为所有交易对设置杠杆
 
         Returns:
             BinanceFuturesClient: BinanceFuturesClient实例
-            
+
         Example:
             >>> client = self._init_binance_client()
             >>> logger.info("币安客户端初始化成功")
@@ -121,7 +121,7 @@ class TradingEngine:
 
         Returns:
             DingTalkNotifier: DingTalkNotifier实例
-            
+
         Example:
             >>> notifier = self._init_notifier()
             >>> logger.info("钉钉通知器初始化成功")
@@ -138,7 +138,7 @@ class TradingEngine:
 
         Returns:
             Dict[str, Any]: 包含交易对和策略实例映射的字典
-            
+
         Example:
             >>> strategies = self._init_strategies()
             >>> print(len(strategies))
@@ -179,7 +179,7 @@ class TradingEngine:
 
         Returns:
             list: K线列表
-            
+
         Example:
             >>> klines = self._get_market_data("BTCUSDT", interval="1h", limit=100)
             >>> print(len(klines))
@@ -206,7 +206,7 @@ class TradingEngine:
 
         Returns:
             bool: 表示执行是否成功的布尔值
-            
+
         Example:
             >>> success = self._execute_trade("BTCUSDT", signal)
             >>> if success:
@@ -276,7 +276,7 @@ class TradingEngine:
 
         Returns:
             Dict[str, Any]: 策略评估结果
-            
+
         Example:
             >>> signal = self.evaluate_strategy("BTCUSDT")
             >>> print(signal['action'])
@@ -308,7 +308,7 @@ class TradingEngine:
 
         Returns:
             Dict[str, Dict[str, Any]]: 包含所有交易对策略信号的字典
-            
+
         Example:
             >>> signals = self.evaluate_all_strategies()
             >>> for symbol, signal in signals.items():
@@ -325,7 +325,7 @@ class TradingEngine:
 
         Returns:
             bool: 表示执行是否成功的布尔值
-            
+
         Example:
             >>> success = self.run_once()
             >>> if success:
@@ -348,7 +348,7 @@ class TradingEngine:
 
         Returns:
             bool: 表示执行是否成功的布尔值
-            
+
         Example:
             >>> success = self.run_once_for_symbol("BTCUSDT")
             >>> if success:
@@ -387,7 +387,7 @@ class TradingEngine:
 
         Returns:
             bool: 表示执行是否成功的布尔值
-            
+
         Example:
             >>> success = self.run_once_for_all_symbols()
             >>> if success:
@@ -427,7 +427,7 @@ class TradingEngine:
 
         Args:
             interval (int, optional): 每次循环之间的秒数. 默认为 3600.
-            
+
         Example:
             >>> # 持续运行，每小时检查一次
             >>> self.run_continuously(interval=3600)

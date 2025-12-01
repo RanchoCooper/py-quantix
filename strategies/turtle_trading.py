@@ -133,7 +133,7 @@ class TurtleTradingStrategy:
             risk_per_trade = account_size * 0.01  # 每次交易风险1%
 
             # 计算仓位规模：风险金额 / (ATR * 合约规模)
-            # 对于期货，我们简化直接使用ATR
+            # 对于合约，我们简化直接使用ATR
             position_size = risk_per_trade / atr if atr > 0 else 0
             position_size = round(position_size, 3)  # 四舍五入到小数点后3位
 
