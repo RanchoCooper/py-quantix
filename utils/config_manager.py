@@ -66,6 +66,9 @@ class ConfigManager:
 
         Returns:
             表示有效性的布尔值
+            
+        Configuration Options:
+            - 'signal_output': 信号输出方式，支持 'dingtalk' (钉钉通知) 或 'console' (命令行打印)
         """
         required_sections = ['binance', 'trading', 'strategies', 'notifications']
 
@@ -89,18 +92,25 @@ class ConfigManager:
             if not isinstance(config['trading']['symbols'], dict):
                 logger.error("trading.symbols 必须是一个对象")
                 return False
-                
+
             for symbol, symbol_config in config['trading']['symbols'].items():
                 symbol_required = ['leverage', 'position_size', 'strategy']
                 for field in symbol_required:
                     if field not in symbol_config:
                         logger.error(f"交易对 {symbol} 的配置中缺少必需字段: {field}")
                         return False
-                        
+
                 # 验证选择的策略存在
                 strategy = symbol_config['strategy']
                 if strategy not in config['strategies']:
                     logger.error(f"交易对 {symbol} 选择的策略 '{strategy}' 在策略配置中未找到")
+                    return False
+
+            # 验证信号输出方式（如果存在）
+            if 'signal_output' in config['trading']:
+                signal_output = config['trading']['signal_output']
+                if signal_output not in ['dingtalk', 'console']:
+                    logger.error("trading.signal_output 必须是 'dingtalk' 或 'console'")
                     return False
         else:
             # 旧格式 - 单个交易对配置
@@ -115,6 +125,13 @@ class ConfigManager:
             if strategy not in config['strategies']:
                 logger.error(f"选择的策略 '{strategy}' 在策略配置中未找到")
                 return False
+
+            # 验证信号输出方式（如果存在）
+            if 'signal_output' in config['trading']:
+                signal_output = config['trading']['signal_output']
+                if signal_output not in ['dingtalk', 'console']:
+                    logger.error("trading.signal_output 必须是 'dingtalk' 或 'console'")
+                    return False
 
         # 验证notifications部分
         if 'dingtalk' not in config['notifications']:

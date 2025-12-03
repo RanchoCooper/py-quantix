@@ -24,7 +24,8 @@
                     "std_dev_multiplier": 2
                 }
             }
-        }
+        },
+        "signal_output": "dingtalk"  
     },
     "strategies": {
         "trend_following": {

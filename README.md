@@ -70,6 +70,7 @@
      - `position_size`: 仓位大小
      - `strategy`: 使用的策略名称
      - `strategy_params`: 策略特定参数
+   - `signal_output`: 信号输出方式，支持 "dingtalk" (钉钉通知) 或 "console" (命令行打印)
 
    ### 策略全局参数
    - 各策略的默认参数设置

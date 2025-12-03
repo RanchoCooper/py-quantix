@@ -1,7 +1,7 @@
 import importlib
 import json
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from loguru import logger
 
@@ -21,6 +21,7 @@ class TradingEngine:
     4. 为每个交易对初始化对应的策略
     5. 获取市场数据并评估策略
     6. 根据运行模式执行交易或仅监控
+    7. 根据配置选择信号输出方式（钉钉通知或命令行打印）
     """
 
     def __init__(self, config_path: str = "config/config.json", mode: str = "auto"):
@@ -198,7 +199,7 @@ class TradingEngine:
 
     def _execute_trade(self, symbol: str, signal: Dict[str, Any]) -> bool:
         """
-        根据信号执行交易
+        执行交易操作，根据配置选择信号输出方式
 
         Args:
             symbol (str): 交易对符号
@@ -206,6 +207,10 @@ class TradingEngine:
 
         Returns:
             bool: 表示执行是否成功的布尔值
+
+        Signal Output Options:
+            - 'dingtalk': 通过钉钉机器人发送交易通知
+            - 'console': 通过命令行日志打印交易信号
 
         Example:
             >>> success = self._execute_trade("BTCUSDT", signal)
@@ -219,14 +224,20 @@ class TradingEngine:
         symbol_config = trading_symbols.get(symbol, {})
         position_size = symbol_config.get('position_size', 0.001)
 
-        # 发送交易通知（无论哪种模式都会发送）
-        self.notifier.send_trade_notification(
-            symbol=symbol,
-            action=signal['action'],
-            price=signal.get('price', 0),
-            reason=signal.get('reason', ''),
-            position_size=position_size
-        )
+        # 获取信号输出方式配置，默认为命令行
+        signal_output = self.config['trading'].get('signal_output', 'console')
+
+        # 根据配置发送交易通知
+        if signal_output == 'dingtalk':
+            self.notifier.send_trade_notification(
+                symbol=symbol,
+                action=signal['action'],
+                price=signal.get('price', 0),
+                reason=signal.get('reason', ''),
+                position_size=position_size
+            )
+        elif signal_output == 'console':
+            logger.info(f"[信号输出] 交易对: {symbol}, 操作: {signal['action']}, 价格: {signal.get('price', 0)}, 原因: {signal.get('reason', '')}, 头寸大小: {position_size}")
 
         # 根据运行模式决定是否真正下单
         if self.mode == "monitor":
