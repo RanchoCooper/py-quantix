@@ -1,183 +1,210 @@
 from typing import Any, Dict, List
 
+import pandas as pd
 from loguru import logger
 
+from strategies.base_strategy import BaseStrategy
 
-class TurtleTradingStrategy:
+
+class TurtleTradingStrategy(BaseStrategy):
     """
-    基于突破系统的海龟交易策略
+    海龟交易策略
+
+    基于唐奇安通道突破和ATR的海龟交易系统：
+    1. 入场信号：价格突破过去N天的最高点（上轨）时买入，跌破过去N天的最低点（下轨）时卖出
+    2. 出场信号：价格反向突破过去M天的最低点（上轨）时卖出，突破过去M天的最高点（下轨）时买入
+    3. 止损：基于ATR的波动性止损
+    4. 头寸规模：根据ATR调整头寸规模
     """
 
-    def __init__(self, entry_period: int = 20, exit_period: int = 10, atr_period: int = 20):
+    def __init__(self, **kwargs):
         """
         初始化海龟交易策略
 
         Args:
-            entry_period: 入场突破计算周期（唐奇安通道）
-            exit_period: 出场突破计算周期（唐奇安通道）
-            atr_period: ATR计算周期
+            kwargs: 策略参数字典
+                - entry_period (int, optional): 入场突破计算周期（唐奇安通道），默认为20
+                - exit_period (int, optional): 出场突破计算周期（唐奇安通道），默认为10
+                - atr_period (int, optional): ATR计算周期，默认为20
         """
-        self.entry_period = entry_period
-        self.exit_period = exit_period
-        self.atr_period = atr_period
+        super().__init__(**kwargs)
+        self.entry_period = kwargs.get('entry_period', 20)
+        self.exit_period = kwargs.get('exit_period', 10)
+        self.atr_period = kwargs.get('atr_period', 20)
         logger.info(
-            f"海龟交易策略初始化，入场周期={entry_period}，"
-            f"出场周期={exit_period}，ATR周期={atr_period}"
+            f"海龟交易策略初始化，入场周期={self.entry_period}，"
+            f"出场周期={self.exit_period}，ATR周期={self.atr_period}"
         )
 
-    def _calculate_donchian_channels(self, highs: List[float], lows: List[float], period: int) -> tuple:
+    def calculate_indicators(self, klines: List[List]) -> pd.DataFrame:
         """
-        计算唐奇安通道
-
-        Args:
-            highs: 最高价列表
-            lows: 最低价列表
-            period: 计算周期
-
-        Returns:
-            (上轨, 下轨)元组
-        """
-        upper_channel = max(highs[-period:]) if len(highs) >= period else None
-        lower_channel = min(lows[-period:]) if len(lows) >= period else None
-        return upper_channel, lower_channel
-
-    def _calculate_atr(self, highs: List[float], lows: List[float], closes: List[float], period: int) -> float:
-        """
-        计算平均真实波幅(ATR)
-
-        Args:
-            highs: 最高价列表
-            lows: 最低价列表
-            closes: 收盘价列表
-            period: 计算周期
-
-        Returns:
-            ATR值
-        """
-        if len(closes) < period + 1:
-            return 0
-
-        tr_list = []
-        for i in range(len(closes) - period, len(closes)):
-            high = highs[i]
-            low = lows[i]
-            prev_close = closes[i - 1] if i > 0 else closes[i]
-
-            tr = max(
-                high - low,  # 当前最高 - 当前最低
-                abs(high - prev_close),  # 绝对值(当前最高 - 上一收盘)
-                abs(low - prev_close)  # 绝对值(当前最低 - 上一收盘)
-            )
-            tr_list.append(tr)
-
-        return sum(tr_list) / len(tr_list) if tr_list else 0
-
-    def evaluate(self, klines: List[List]) -> Dict[str, Any]:
-        """
-        基于K线数据评估策略
+        计算海龟交易策略所需的技术指标
 
         Args:
             klines: 来自币安API的K线数据
 
         Returns:
+            包含所有技术指标的DataFrame
+        """
+        # 将klines转换为DataFrame
+        df = pd.DataFrame(klines, columns=[
+            'timestamp', 'open', 'high', 'low', 'close', 'volume',
+            'close_time', 'quote_asset_volume', 'number_of_trades',
+            'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+        ])
+
+        # 转换为数值
+        df['open'] = pd.to_numeric(df['open'])
+        df['high'] = pd.to_numeric(df['high'])
+        df['low'] = pd.to_numeric(df['low'])
+        df['close'] = pd.to_numeric(df['close'])
+        df['volume'] = pd.to_numeric(df['volume'])
+
+        # 需要有足够的数据进行所有计算
+        required_length = max(self.entry_period, self.exit_period, self.atr_period) + 1
+        if len(df) < required_length:
+            return df
+
+        # 计算唐奇安通道（入场）
+        df['entry_upper'] = df['high'].rolling(window=self.entry_period).max()
+        df['entry_lower'] = df['low'].rolling(window=self.entry_period).min()
+
+        # 计算唐奇安通道（出场）
+        df['exit_upper'] = df['high'].rolling(window=self.exit_period).max()
+        df['exit_lower'] = df['low'].rolling(window=self.exit_period).min()
+
+        # 计算ATR用于仓位管理
+        df['tr0'] = abs(df["high"] - df["low"])
+        df['tr1'] = abs(df["high"] - df["close"].shift())
+        df['tr2'] = abs(df["low"] - df["close"].shift())
+        df["tr"] = df[['tr0', 'tr1', 'tr2']].max(axis=1)
+        df['atr'] = df['tr'].rolling(window=self.atr_period).mean()
+
+        return df
+
+    def generate_signals(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        基于技术指标生成交易信号
+
+        Args:
+            df: 包含技术指标的DataFrame
+
+        Returns:
             包含信号的评估结果
         """
+        # 检查是否有足够的指标数据
+        if len(df) < max(self.entry_period, self.exit_period, self.atr_period) + 1:
+            return {"action": "hold", "reason": "数据不足"}
+
+        current = df.iloc[-1]
+
+        # 检查是否有NaN值
+        if pd.isna(current['entry_upper']) or pd.isna(current['entry_lower']) or pd.isna(current['atr']):
+            return {"action": "hold", "reason": "指标数据不完整"}
+
+        current_price = current['close']
+        entry_upper = current['entry_upper']
+        entry_lower = current['entry_lower']
+        atr = current['atr']
+
+        # 获取前一个周期的数据用于趋势判断
+        if len(df) >= 2:
+            previous = df.iloc[-2]
+            prev_entry_upper = previous['entry_upper']
+            prev_entry_lower = previous['entry_lower']
+        else:
+            prev_entry_upper = prev_entry_lower = None
+
+        # 根据通道突破确定市场方向
+        # 如果价格突破上轨，为看涨信号
+        # 如果价格跌破下轨，为看跌信号
+        long_signal = (
+            entry_upper is not None and
+            current_price > entry_upper and
+            prev_entry_upper is not None and
+            previous['close'] <= prev_entry_upper
+        )
+
+        short_signal = (
+            entry_lower is not None and
+            current_price < entry_lower and
+            prev_entry_lower is not None and
+            previous['close'] >= prev_entry_lower
+        )
+
+        # 基于ATR的仓位管理（每次交易风险账户的1%）
+        # 使用固定账户规模作为示例
+        account_size = 10000  # 美元
+        risk_per_trade = account_size * 0.01  # 每次交易风险1%
+
+        # 计算仓位规模：风险金额 / (ATR * 合约规模)
+        # 对于合约，我们简化直接使用ATR
+        position_size = risk_per_trade / atr if atr > 0 else 0
+        position_size = round(position_size, 3)  # 四舍五入到小数点后3位
+
+        # 生成信号
+        if long_signal:
+            # 基于ATR计算止损
+            stop_loss = current_price - (2 * atr)
+            take_profit = current_price + (2 * atr)  # 简单的2:1盈亏比
+
+            return {
+                "action": "buy",
+                "reason": "突破唐奇安通道上轨 - 多头信号",
+                "price": float(current_price),
+                "position_size": position_size,
+                "stop_loss": float(stop_loss),
+                "take_profit": float(take_profit),
+                "indicators": {
+                    "entry_upper": float(entry_upper),
+                    "atr": float(atr)
+                }
+            }
+        elif short_signal:
+            # 基于ATR计算止损
+            stop_loss = current_price + (2 * atr)
+            take_profit = current_price - (2 * atr)  # 简单的2:1盈亏比
+
+            return {
+                "action": "sell",
+                "reason": "跌破唐奇安通道下轨 - 空头信号",
+                "price": float(current_price),
+                "position_size": position_size,
+                "stop_loss": float(stop_loss),
+                "take_profit": float(take_profit),
+                "indicators": {
+                    "entry_lower": float(entry_lower),
+                    "atr": float(atr)
+                }
+            }
+        else:
+            return {"action": "hold", "reason": "无明显突破信号"}
+
+
+
+    def evaluate(self, klines: List[List]) -> Dict[str, Any]:
+        """
+        评估策略并生成交易信号
+
+        Args:
+            klines: K线数据 [[timestamp, open, high, low, close, volume], ...]
+
+        Returns:
+            包含动作和原因的字典
+        """
         try:
-            # 提取价格数据
-            highs = [float(kline[2]) for kline in klines]
-            lows = [float(kline[3]) for kline in klines]
-            closes = [float(kline[4]) for kline in klines]
+            # 将K线数据转换为DataFrame
+            df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume',
+                                               'close_time', 'quote_asset_volume', 'number_of_trades',
+                                               'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
+            df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
 
-            # 需要有足够的数据进行所有计算
-            required_length = max(self.entry_period, self.exit_period, self.atr_period) + 1
-            if len(closes) < required_length:
-                return {"action": "hold", "reason": "数据不足"}
-
-            current_price = closes[-1]
-
-            # 计算入场和出场通道
-            entry_upper, entry_lower = self._calculate_donchian_channels(highs, lows, self.entry_period)
-            exit_upper, exit_lower = self._calculate_donchian_channels(highs, lows, self.exit_period)
-
-            # 计算ATR用于仓位管理
-            atr = self._calculate_atr(highs, lows, closes, self.atr_period)
-
-            # 获取之前的通道用于趋势判断
-            if len(highs) >= self.entry_period + 1:
-                prev_entry_upper, prev_entry_lower = self._calculate_donchian_channels(
-                    highs[:-1], lows[:-1], self.entry_period
-                )
-            else:
-                prev_entry_upper, prev_entry_lower = None, None
-
-            # 根据通道突破确定市场方向
-            # 如果价格突破上轨，为看涨信号
-            # 如果价格跌破下轨，为看跌信号
-            long_signal = (
-                entry_upper is not None and
-                current_price > entry_upper and
-                prev_entry_upper is not None and
-                current_price > prev_entry_upper
-            )
-
-            short_signal = (
-                entry_lower is not None and
-                current_price < entry_lower and
-                prev_entry_lower is not None and
-                current_price < prev_entry_lower
-            )
-
-            # 基于ATR的仓位管理（每次交易风险账户的1%）
-            # 使用固定账户规模作为示例
-            account_size = 10000  # 美元
-            risk_per_trade = account_size * 0.01  # 每次交易风险1%
-
-            # 计算仓位规模：风险金额 / (ATR * 合约规模)
-            # 对于合约，我们简化直接使用ATR
-            position_size = risk_per_trade / atr if atr > 0 else 0
-            position_size = round(position_size, 3)  # 四舍五入到小数点后3位
-
-            # 生成信号
-            if long_signal:
-                # 基于ATR计算止损
-                stop_loss = current_price - (2 * atr)
-                take_profit = current_price + (2 * atr)  # 简单的2:1盈亏比
-
-                return {
-                    "action": "buy",
-                    "reason": "突破唐奇安通道上轨 - 多头信号",
-                    "price": current_price,
-                    "position_size": position_size,
-                    "stop_loss": stop_loss,
-                    "take_profit": take_profit,
-                    "indicators": {
-                        "entry_upper": entry_upper,
-                        "atr": atr
-                    }
-                }
-            elif short_signal:
-                # 基于ATR计算止损
-                stop_loss = current_price + (2 * atr)
-                take_profit = current_price - (2 * atr)  # 简单的2:1盈亏比
-
-                return {
-                    "action": "sell",
-                    "reason": "跌破唐奇安通道下轨 - 空头信号",
-                    "price": current_price,
-                    "position_size": position_size,
-                    "stop_loss": stop_loss,
-                    "take_profit": take_profit,
-                    "indicators": {
-                        "entry_lower": entry_lower,
-                        "atr": atr
-                    }
-                }
-            else:
-                return {"action": "hold", "reason": "无明显突破信号"}
-
+            indicators = self.calculate_indicators(df)
+            signals = self.generate_signals(indicators)
+            return signals
         except Exception as e:
-            logger.error(f"评估海龟交易策略时出错: {e}")
-            return {"action": "hold", "reason": f"错误: {str(e)}"}
+            logger.error(f"海龟交易策略评估错误: {str(e)}")
+            return {"action": "hold", "reason": f"评估错误: {str(e)}"}
 
 
 # 示例用法

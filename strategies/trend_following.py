@@ -3,23 +3,26 @@ from typing import Any, Dict, List
 import pandas as pd
 from loguru import logger
 
+from strategies.base_strategy import BaseStrategy
 
-class TrendFollowingStrategy:
+
+class TrendFollowingStrategy(BaseStrategy):
     """
     基于移动平均线和动量的趋势跟踪策略
     """
 
-    def __init__(self, period: int = 14, multiplier: float = 2.0):
+    def __init__(self, **kwargs):
         """
         初始化趋势跟踪策略
 
         Args:
-            period: 计算移动平均线的周期
-            multiplier: 止损和止盈水平的乘数
+            kwargs: 策略参数字典
+                - period (int, optional): 计算移动平均线的周期，默认为14
+                - multiplier (float, optional): 止损和止盈水平的乘数，默认为2.0
         """
-        self.period = period
-        self.multiplier = multiplier
-        logger.info(f"趋势跟踪策略初始化，周期={period}，乘数={multiplier}")
+        self.period = kwargs.get('period', 14)
+        self.multiplier = kwargs.get('multiplier', 2.0)
+        logger.info(f"趋势跟踪策略初始化，周期={self.period}，乘数={self.multiplier}")
 
     def calculate_indicators(self, klines: List[List]) -> pd.DataFrame:
         """
@@ -118,7 +121,13 @@ class TrendFollowingStrategy:
             包含信号的评估结果
         """
         try:
-            df = self.calculate_indicators(klines)
+            # 将K线数据转换为DataFrame
+            df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume',
+                                               'close_time', 'quote_asset_volume', 'number_of_trades',
+                                               'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
+            df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
+
+            df = self.calculate_indicators(df)
             signal = self.generate_signals(df)
             return signal
         except Exception as e:

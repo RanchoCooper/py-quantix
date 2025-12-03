@@ -143,8 +143,8 @@ def main():
         print(f"  交易次数: {result['num_trades']}")
 
     # 将结果保存到文件
-    with open('backtest_results.json', 'w') as f:
-        json.dump(results, f, indent=2)
+    with open('backtest_results.json', 'w', encoding='utf-8') as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
 
     print("\n回测结果已保存到backtest_results.json")
 

@@ -3,8 +3,6 @@
 交易策略单元测试
 """
 
-from datetime import datetime, timedelta
-
 import numpy as np
 import pandas as pd
 
@@ -117,43 +115,19 @@ def test_turtle_trading_strategy():
     # 创建策略
     strategy = TurtleTradingStrategy()
 
-    # 创建测试数据（海龟策略需要K线数据格式）
-    # 模拟币安API的K线数据格式
-    test_klines = []
-    base_timestamp = 1617590400000  # 示例时间戳
-    for i in range(100):
-        # 构造K线数据 [timestamp, open, high, low, close, volume, ...]
-        open_price = 50000 + i * 10
-        close_price = 50000 + i * 12
-        high_price = max(open_price, close_price) + 50
-        low_price = min(open_price, close_price) - 50
-        volume = 100 + i
-
-        kline = [
-            str(base_timestamp + i * 3600000),  # timestamp
-            str(open_price),    # open
-            str(high_price),    # high
-            str(low_price),     # low
-            str(close_price),   # close
-            str(volume),        # volume
-            str(base_timestamp + (i + 1) * 3600000 - 1),  # close_time
-            "0",                # quote_asset_volume
-            "0",                # number_of_trades
-            "0",                # taker_buy_base_asset_volume
-            "0",                # taker_buy_quote_asset_volume
-            "0"                 # ignore
-        ]
-        test_klines.append(kline)
+    # 创建测试数据（使用DataFrame格式）
+    data = create_test_data()
 
     # 测试评估方法
     # 测试几行数据确保没有异常
-    result = strategy.evaluate(test_klines)
-    # 处理字符串和字典两种返回格式
-    if isinstance(result, dict):
-        signal = result.get('action', '').upper()
-    else:
-        signal = result.upper()
-    assert signal in ["BUY", "SELL", "HOLD"], f"无效信号: {result}"
+    for i in range(20, min(30, len(data))):
+        result = strategy.evaluate(data.iloc[i:i+1])  # 传递单行数据
+        # 处理字符串和字典两种返回格式
+        if isinstance(result, dict):
+            signal = result.get('action', '').upper()
+        else:
+            signal = result.upper()
+        assert signal in ["BUY", "SELL", "HOLD"], f"无效信号: {result}"
 
     print("✓ 评估方法正常工作")
     print("海龟交易策略测试通过!\n")

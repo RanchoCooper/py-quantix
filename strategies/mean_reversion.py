@@ -1,13 +1,12 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
-from utils.logger import setup_logger
+from strategies.base_strategy import BaseStrategy
 
 
-class MeanReversionStrategy:
+class MeanReversionStrategy(BaseStrategy):
     """
     基于布林带和RSI的均值回归策略
 
@@ -16,13 +15,14 @@ class MeanReversionStrategy:
     当价格触及布林带上轨且RSI处于超买区域时产生卖出信号。
     """
 
-    def __init__(self, period: int = 20, std_dev_multiplier: float = 2.0):
+    def __init__(self, **kwargs):
         """
         初始化均值回归策略
 
         Args:
-            period (int, optional): 计算移动平均线和标准差的周期. 默认为 20.
-            std_dev_multiplier (float, optional): 标准差乘数（布林带宽度）. 默认为 2.0.
+            kwargs: 策略参数字典
+                - period (int, optional): 计算移动平均线和标准差的周期. 默认为 20.
+                - std_dev_multiplier (float, optional): 标准差乘数（布林带宽度）. 默认为 2.0.
 
         Attributes:
             period (int): 计算周期
@@ -32,9 +32,9 @@ class MeanReversionStrategy:
             >>> strategy = MeanReversionStrategy(period=20, std_dev_multiplier=2.0)
             >>> logger.info("均值回归策略初始化成功")
         """
-        self.period = period
-        self.std_dev_multiplier = std_dev_multiplier
-        logger.info(f"均值回归策略初始化，周期={period}，标准差乘数={std_dev_multiplier}")
+        self.period = kwargs.get('period', 20)
+        self.std_dev_multiplier = kwargs.get('std_dev_multiplier', 2.0)
+        logger.info(f"均值回归策略初始化，周期={self.period}，标准差乘数={self.std_dev_multiplier}")
 
     def calculate_indicators(self, klines: List[List]) -> pd.DataFrame:
         """
@@ -162,7 +162,13 @@ class MeanReversionStrategy:
             hold
         """
         try:
-            df = self.calculate_indicators(klines)
+            # 将K线数据转换为DataFrame
+            df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume',
+                                               'close_time', 'quote_asset_volume', 'number_of_trades',
+                                               'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
+            df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
+
+            df = self.calculate_indicators(df)
             signal = self.generate_signals(df)
             return signal
         except Exception as e:

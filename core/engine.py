@@ -3,6 +3,7 @@ import json
 import time
 from typing import Any, Dict
 
+import pandas as pd
 import yaml
 from loguru import logger
 
@@ -168,7 +169,14 @@ class TradingEngine:
             # 动态导入并实例化策略
             try:
                 module = importlib.import_module(f"strategies.{strategy_name}")
-                strategy_class = getattr(module, f"{strategy_name.title().replace('_', '')}Strategy")
+                # 使用更准确的类名映射
+                class_name_map = {
+                    'trend_following': 'TrendFollowingStrategy',
+                    'mean_reversion': 'MeanReversionStrategy',
+                    'turtle_trading': 'TurtleTradingStrategy'
+                }
+                strategy_class_name = class_name_map.get(strategy_name, f"{strategy_name.title().replace('_', '')}Strategy")
+                strategy_class = getattr(module, strategy_class_name)
                 strategy = strategy_class(**strategy_config)
                 strategies[symbol] = strategy
                 logger.info(f"交易对 {symbol} 的策略 {strategy_name} 初始化完成")
@@ -312,8 +320,20 @@ class TradingEngine:
                 logger.error(f"未找到交易对 {symbol} 的策略")
                 return {"action": "hold", "reason": f"未找到交易对 {symbol} 的策略"}
 
+            # 将K线数据转换为DataFrame格式
+            df = pd.DataFrame(klines, columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                'close_time', 'quote_asset_volume', 'number_of_trades',
+                'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+            ])
+
+            # 转换数值类型
+            numeric_columns = ['open', 'high', 'low', 'close', 'volume']
+            for col in numeric_columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
             # 评估策略
-            signal = strategy.evaluate(klines)
+            signal = strategy.evaluate(df)
 
             logger.info(f"交易对 {symbol} 的策略信号: {signal}")
             return signal

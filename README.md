@@ -195,6 +195,7 @@ py-quantix/
 ├── requirements.txt           # Python依赖
 ├── strategies/
 │   ├── __init__.py
+│   ├── base_strategy.py       # 策略基类
 │   ├── mean_reversion.py      # 均值回归策略
 │   ├── trend_following.py     # 趋势跟踪策略
 │   └── turtle_trading.py      # 海龟交易策略
@@ -218,6 +219,14 @@ tests/
 ```
 
 ## 交易策略
+
+所有交易策略都继承自`BaseStrategy`抽象基类，该基类提供了统一的接口和通用的功能实现。
+
+### BaseStrategy 基类
+所有交易策略的基类，定义了统一的接口：
+- `calculate_indicators()`: 计算策略所需的技术指标
+- `generate_signals()`: 基于指标生成交易信号
+- `evaluate()`: 评估K线数据并返回交易信号（可被子类重写）
 
 ### 趋势跟踪策略
 使用移动平均线和动量指标来识别并跟随市场趋势。

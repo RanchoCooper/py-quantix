@@ -1,19 +1,19 @@
 {
-  "Trend Following": {
+  "趋势跟踪": {
     "initial_capital": 10000,
     "final_value": 10000,
     "return_pct": 0.0,
     "num_trades": 0,
     "trades": []
   },
-  "Mean Reversion": {
+  "均值回归": {
     "initial_capital": 10000,
     "final_value": 10000,
     "return_pct": 0.0,
     "num_trades": 0,
     "trades": []
   },
-  "Turtle Trading": {
+  "海龟交易": {
     "initial_capital": 10000,
     "final_value": 10000,
     "return_pct": 0.0,

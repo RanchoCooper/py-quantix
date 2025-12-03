@@ -8,19 +8,33 @@ from loguru import logger
 
 class ConfigManager:
     """
-    配置管理器，用于处理配置文件
+    配置管理器，用于加载、验证和管理交易系统的配置
+    支持YAML和JSON格式的配置文件
     """
+
+    # 支持的策略列表
+    SUPPORTED_STRATEGIES = ['trend_following', 'mean_reversion', 'turtle_trading']
 
     @staticmethod
     def load_config(config_path: str) -> Dict[str, Any]:
         """
-        从YAML文件加载配置，支持JSON和YAML格式
+        从文件加载配置，支持YAML和JSON格式
 
         Args:
-            config_path: 配置文件路径
+            config_path (str): 配置文件路径
 
         Returns:
-            配置字典
+            Dict[str, Any]: 配置字典
+
+        Raises:
+            FileNotFoundError: 当配置文件不存在时抛出
+            yaml.YAMLError: 当YAML配置文件格式不正确时抛出
+            json.JSONDecodeError: 当JSON配置文件格式不正确时抛出
+
+        Example:
+            >>> config = ConfigManager.load_config("config/config.yaml")
+            >>> print(config['binance']['api_key'])
+            your_api_key
         """
         try:
             with open(config_path, 'r') as f:
@@ -31,27 +45,125 @@ class ConfigManager:
                     config = json.load(f)
                     logger.info(f"JSON配置已从 {config_path} 加载")
             return config
-        except FileNotFoundError:
-            logger.error(f"配置文件未找到: {config_path}")
-            raise
-        except yaml.YAMLError as e:
-            logger.error(f"配置文件中的YAML无效: {e}")
-            raise
-        except json.JSONDecodeError as e:
-            logger.error(f"配置文件中的JSON无效: {e}")
-            raise
         except Exception as e:
             logger.error(f"加载配置失败: {e}")
             raise
 
     @staticmethod
-    def save_config(config: Dict[str, Any], config_path: str):
+    def validate_config(config: Dict[str, Any]) -> bool:
         """
-        保存配置到文件，支持JSON和YAML格式
+        验证配置的有效性
 
         Args:
-            config: 配置字典
-            config_path: 配置文件路径
+            config (Dict[str, Any]): 配置字典
+
+        Returns:
+            bool: 配置是否有效
+
+        Validation Checks:
+            - 必需字段存在性检查
+            - 币安API密钥格式验证
+            - 交易对配置验证
+            - 策略配置验证
+            - 通知配置验证
+
+        Example:
+            >>> is_valid = ConfigManager.validate_config(config)
+            >>> if is_valid:
+            ...     logger.info("配置验证通过")
+        """
+        try:
+            # 检查必需的顶级字段
+            required_fields = ['binance', 'trading', 'strategies', 'notifications']
+            for field in required_fields:
+                if field not in config:
+                    logger.error(f"缺少必需的配置字段: {field}")
+                    return False
+
+            # 验证币安配置
+            binance_config = config['binance']
+            if not isinstance(binance_config.get('api_key'), str) or len(binance_config['api_key']) == 0:
+                logger.error("无效的币安API密钥")
+                return False
+            if not isinstance(binance_config.get('api_secret'), str) or len(binance_config['api_secret']) == 0:
+                logger.error("无效的币安API密钥")
+                return False
+            if 'testnet' not in binance_config:
+                logger.warning("未设置testnet字段，默认为False")
+                config['binance']['testnet'] = False
+
+            # 验证交易配置
+            trading_config = config['trading']
+            if 'symbols' not in trading_config or not isinstance(trading_config['symbols'], dict):
+                logger.error("无效的交易配置")
+                return False
+
+            # 验证每个交易对配置
+            for symbol, symbol_config in trading_config['symbols'].items():
+                if not isinstance(symbol_config, dict):
+                    logger.error(f"交易对 {symbol} 的配置无效")
+                    return False
+
+                # 验证杠杆
+                if 'leverage' not in symbol_config or not isinstance(symbol_config['leverage'], int):
+                    logger.error(f"交易对 {symbol} 缺少有效的杠杆配置")
+                    return False
+
+                # 验证头寸大小
+                if 'position_size' not in symbol_config or not isinstance(symbol_config['position_size'], (int, float)):
+                    logger.error(f"交易对 {symbol} 缺少有效的头寸大小配置")
+                    return False
+
+                # 验证策略
+                if 'strategy' not in symbol_config or not isinstance(symbol_config['strategy'], str):
+                    logger.error(f"交易对 {symbol} 缺少有效的策略配置")
+                    return False
+
+                # 验证策略是否受支持
+                if symbol_config['strategy'] not in ConfigManager.SUPPORTED_STRATEGIES:
+                    logger.error(f"交易对 {symbol} 使用了不支持的策略: {symbol_config['strategy']}")
+                    return False
+
+                # 验证策略参数（如果存在）
+                if 'strategy_params' in symbol_config and not isinstance(symbol_config['strategy_params'], dict):
+                    logger.error(f"交易对 {symbol} 的策略参数配置无效")
+                    return False
+
+            # 验证策略配置
+            strategies_config = config['strategies']
+            if not isinstance(strategies_config, dict):
+                logger.error("无效的策略配置")
+                return False
+
+            # 验证通知配置
+            notifications_config = config['notifications']
+            if not isinstance(notifications_config, dict):
+                logger.error("无效的通知配置")
+                return False
+
+            logger.info("配置验证通过")
+            return True
+
+        except Exception as e:
+            logger.error(f"配置验证过程中出现错误: {e}")
+            return False
+
+    @staticmethod
+    def save_config(config: Dict[str, Any], config_path: str):
+        """
+        保存配置到文件，支持YAML和JSON格式
+
+        Args:
+            config (Dict[str, Any]): 配置字典
+            config_path (str): 配置文件路径
+
+        Raises:
+            yaml.YAMLError: 当YAML配置文件格式不正确时抛出
+            json.JSONDecodeError: 当JSON配置文件格式不正确时抛出
+
+        Example:
+            >>> ConfigManager.save_config(config, "config/config.yaml")
+            >>> logger.info("配置已保存到 config/config.yaml")
         """
         try:
             # 如果目录不存在则创建
@@ -67,94 +179,3 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"保存配置失败: {e}")
             raise
-
-    @staticmethod
-    def validate_config(config: Dict[str, Any]) -> bool:
-        """
-        验证配置结构
-
-        Args:
-            config: 配置字典
-
-        Returns:
-            表示有效性的布尔值
-
-        Configuration Options:
-            - 'signal_output': 信号输出方式，支持 'dingtalk' (钉钉通知) 或 'console' (命令行打印)
-        """
-        required_sections = ['binance', 'trading', 'strategies', 'notifications']
-
-        for section in required_sections:
-            if section not in config:
-                logger.error(f"配置中缺少必需的部分: {section}")
-                return False
-
-        # 验证binance部分
-        binance_required = ['api_key', 'api_secret']
-        for field in binance_required:
-            if field not in config['binance']:
-                logger.error(f"binance配置中缺少必需字段: {field}")
-                return False
-
-        # 验证trading部分 - 支持两种格式
-        # 格式1: 单个交易对配置 (旧格式)
-        # 格式2: 多个交易对配置 (新格式)
-        if 'symbols' in config['trading']:
-            # 新格式 - 验证每个交易对的配置
-            if not isinstance(config['trading']['symbols'], dict):
-                logger.error("trading.symbols 必须是一个对象")
-                return False
-
-            for symbol, symbol_config in config['trading']['symbols'].items():
-                symbol_required = ['leverage', 'position_size', 'strategy']
-                for field in symbol_required:
-                    if field not in symbol_config:
-                        logger.error(f"交易对 {symbol} 的配置中缺少必需字段: {field}")
-                        return False
-
-                # 验证选择的策略存在
-                strategy = symbol_config['strategy']
-                if strategy not in config['strategies']:
-                    logger.error(f"交易对 {symbol} 选择的策略 '{strategy}' 在策略配置中未找到")
-                    return False
-
-            # 验证信号输出方式（如果存在）
-            if 'signal_output' in config['trading']:
-                signal_output = config['trading']['signal_output']
-                if signal_output not in ['dingtalk', 'console']:
-                    logger.error("trading.signal_output 必须是 'dingtalk' 或 'console'")
-                    return False
-        else:
-            # 旧格式 - 单个交易对配置
-            trading_required = ['symbol', 'leverage', 'position_size', 'strategy']
-            for field in trading_required:
-                if field not in config['trading']:
-                    logger.error(f"trading配置中缺少必需字段: {field}")
-                    return False
-
-            # 验证选择的策略存在
-            strategy = config['trading']['strategy']
-            if strategy not in config['strategies']:
-                logger.error(f"选择的策略 '{strategy}' 在策略配置中未找到")
-                return False
-
-            # 验证信号输出方式（如果存在）
-            if 'signal_output' in config['trading']:
-                signal_output = config['trading']['signal_output']
-                if signal_output not in ['dingtalk', 'console']:
-                    logger.error("trading.signal_output 必须是 'dingtalk' 或 'console'")
-                    return False
-
-        # 验证notifications部分
-        if 'dingtalk' not in config['notifications']:
-            logger.error("notifications配置中缺少dingtalk部分")
-            return False
-
-        dingtalk_required = ['webhook_url']
-        for field in dingtalk_required:
-            if field not in config['notifications']['dingtalk']:
-                logger.error(f"dingtalk配置中缺少必需字段: {field}")
-                return False
-
-        logger.info("配置验证通过")
-        return True
