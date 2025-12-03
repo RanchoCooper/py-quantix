@@ -5,12 +5,10 @@
 
 import os
 import sys
+from utils.logger import setup_logger
 
 # 将项目根目录添加到Python路径中
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from core.engine import TradingEngine
-from utils.logger import setup_logger
 
 
 def main():
@@ -24,7 +22,7 @@ def main():
 
     # 展示如何初始化交易引擎（不实际连接）
     print("\n初始化交易引擎:")
-    print("  engine = TradingEngine('config/config.json')")
+    print("  engine = TradingEngine('config/config.yaml')")
     print("\n这将从JSON文件加载配置并初始化所有组件，包括")
     print("币安客户端、通知器和配置的交易策略。")
 

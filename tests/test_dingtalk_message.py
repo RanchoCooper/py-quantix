@@ -6,19 +6,19 @@
 import os
 import sys
 
+from notifications.dingtalk import DingTalkNotifier
+from utils.config_manager import ConfigManager
+
 # 将项目根目录添加到Python路径中
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
-
-from notifications.dingtalk import DingTalkNotifier
-from utils.config_manager import ConfigManager
 
 
 def send_test_message():
     """发送测试消息到钉钉机器人"""
     try:
         # 加载配置
-        config = ConfigManager.load_config("config/config.json")
+        config = ConfigManager.load_config("config/config.yaml")
 
         # 获取钉钉配置
         dingtalk_config = config['notifications']['dingtalk']

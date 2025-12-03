@@ -3,6 +3,7 @@ import json
 import time
 from typing import Any, Dict
 
+import yaml
 from loguru import logger
 
 from core.binance_client import BinanceFuturesClient
@@ -24,12 +25,13 @@ class TradingEngine:
     7. 根据配置选择信号输出方式（钉钉通知或命令行打印）
     """
 
-    def __init__(self, config_path: str = "config/config.json", mode: str = "auto"):
+    def __init__(self, config_path: str = "config/config.yaml", mode: str = "auto"):
         """
         初始化交易引擎
 
         Args:
-            config_path (str, optional): 配置文件路径. 默认为 "config/config.json".
+            config_path (str, optional): 配置文件路径. 默认为 "config/config.yaml".
+                支持JSON和YAML格式配置文件.
             mode (str, optional): 运行模式 ("auto" 或 "monitor"). 默认为 "auto".
 
         Attributes:
@@ -42,9 +44,11 @@ class TradingEngine:
             positions (Dict[str, Any]): 存储每个交易对的持仓信息
 
         Example:
-            >>> engine = TradingEngine(config_path="config/config.json", mode="auto")
+            >>> engine = TradingEngine(config_path="config/config.yaml", mode="auto")
             >>> logger.info("交易引擎初始化成功")
         """
+        # 加载并验证配置
+        # 支持JSON和YAML格式配置文件
         self.config = self._load_config(config_path)
         self.mode = mode  # 运行模式
         self.client = self._init_binance_client()
@@ -58,7 +62,7 @@ class TradingEngine:
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """
-        从JSON文件加载配置
+        从文件加载配置，支持JSON和YAML格式
 
         Args:
             config_path (str): 配置文件路径
@@ -68,17 +72,22 @@ class TradingEngine:
 
         Raises:
             FileNotFoundError: 当配置文件不存在时抛出
-            json.JSONDecodeError: 当配置文件格式不正确时抛出
+            json.JSONDecodeError: 当JSON配置文件格式不正确时抛出
+            yaml.YAMLError: 当YAML配置文件格式不正确时抛出
 
         Example:
-            >>> config = self._load_config("config/config.json")
+            >>> config = self._load_config("config/config.yaml")
             >>> print(config['binance']['api_key'])
             your_api_key
         """
         try:
             with open(config_path, 'r') as f:
-                config = json.load(f)
-            logger.info(f"配置已从 {config_path} 加载")
+                if config_path.endswith('.yaml') or config_path.endswith('.yml'):
+                    config = yaml.safe_load(f)
+                    logger.info(f"YAML配置已从 {config_path} 加载")
+                else:
+                    config = json.load(f)
+                    logger.info(f"JSON配置已从 {config_path} 加载")
             return config
         except Exception as e:
             logger.error(f"加载配置失败: {e}")

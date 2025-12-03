@@ -52,12 +52,17 @@
 
 ## 配置说明
 
-1. 复制示例配置文件：
+系统支持JSON和YAML两种格式的配置文件。
+
+1. 复制示例配置文件（选择一种格式）：
    ```bash
+   # 可以使用JSON或YAML格式的配置文件
    cp config/config.example.json config/config.json
+   # 或者
+   cp config/config.example.yaml config/config.yaml
    ```
 
-2. 编辑 `config/config.json` 文件，配置以下参数：
+2. 编辑配置文件，配置以下参数：
 
    ### 币安API设置
    - `api_key`: 币安合约API密钥
@@ -95,7 +100,7 @@ python main.py
 - **监控模式**：仅发送通知，不执行实际交易
 
 #### 命令行选项：
-- `--config CONFIG`：配置文件路径（默认：config/config.json）
+- `--config CONFIG`：配置文件路径（默认：config/config.json，支持JSON和YAML格式）
 - `--once`：执行一次策略评估后退出
 - `--interval INTERVAL`：评估间隔秒数（默认：3600）
 - `--log-level {DEBUG,INFO,WARNING,ERROR}`：日志级别（默认：INFO）
@@ -172,7 +177,8 @@ py-quantix/
 ├── backtest_example.py        # 回测实现
 ├── backtest_results.json      # 回测结果文件
 ├── config/
-│   ├── config.example.json    # 示例配置文件
+│   ├── config.example.json    # JSON格式示例配置文件
+│   ├── config.example.yaml    # YAML格式示例配置文件
 │   └── config.json            # 实际配置文件（不在仓库中）
 ├── core/
 │   ├── __init__.py

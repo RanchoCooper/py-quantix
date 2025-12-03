@@ -21,7 +21,7 @@ def test_auto_mode():
     setup_logger("INFO")
 
     # 初始化交易引擎（自动模式）
-    engine = TradingEngine("config/config.json", mode="auto")
+    engine = TradingEngine("config/config.yaml", mode="console")
 
     # 为测试目的手动设置一个交易对
     symbol = "BNBUSDT"
@@ -51,7 +51,7 @@ def test_monitor_mode():
     setup_logger("INFO")
 
     # 初始化交易引擎（监控模式）
-    engine = TradingEngine("config/config.json", mode="monitor")
+    engine = TradingEngine("config/config.yaml", mode="monitor")
 
     # 为测试目的手动设置一个交易对
     symbol = "BNBUSDT"

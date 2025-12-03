@@ -176,5 +176,6 @@ logs/
 ehthumbs.db
 Thumbs.db
 
-# Config file
+# Config files
 config/config.json
+config/config.yaml

@@ -31,8 +31,8 @@ def main():
     parser = argparse.ArgumentParser(description="量化交易系统")
     parser.add_argument(
         "--config",
-        default="config/config.json",
-        help="配置文件路径"
+        default="config/config.yaml",
+        help="配置文件路径 (支持JSON和YAML格式)"
     )
     parser.add_argument(
         "--mode",

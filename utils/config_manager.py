@@ -2,6 +2,7 @@ import json
 import os
 from typing import Any, Dict
 
+import yaml
 from loguru import logger
 
 
@@ -13,7 +14,7 @@ class ConfigManager:
     @staticmethod
     def load_config(config_path: str) -> Dict[str, Any]:
         """
-        从JSON文件加载配置
+        从YAML文件加载配置，支持JSON和YAML格式
 
         Args:
             config_path: 配置文件路径
@@ -23,11 +24,18 @@ class ConfigManager:
         """
         try:
             with open(config_path, 'r') as f:
-                config = json.load(f)
-            logger.info(f"配置已从 {config_path} 加载")
+                if config_path.endswith('.yaml') or config_path.endswith('.yml'):
+                    config = yaml.safe_load(f)
+                    logger.info(f"YAML配置已从 {config_path} 加载")
+                else:
+                    config = json.load(f)
+                    logger.info(f"JSON配置已从 {config_path} 加载")
             return config
         except FileNotFoundError:
             logger.error(f"配置文件未找到: {config_path}")
+            raise
+        except yaml.YAMLError as e:
+            logger.error(f"配置文件中的YAML无效: {e}")
             raise
         except json.JSONDecodeError as e:
             logger.error(f"配置文件中的JSON无效: {e}")
@@ -39,7 +47,7 @@ class ConfigManager:
     @staticmethod
     def save_config(config: Dict[str, Any], config_path: str):
         """
-        保存配置到JSON文件
+        保存配置到文件，支持JSON和YAML格式
 
         Args:
             config: 配置字典
@@ -50,8 +58,12 @@ class ConfigManager:
             os.makedirs(os.path.dirname(config_path), exist_ok=True)
 
             with open(config_path, 'w') as f:
-                json.dump(config, f, indent=4)
-            logger.info(f"配置已保存到 {config_path}")
+                if config_path.endswith('.yaml') or config_path.endswith('.yml'):
+                    yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
+                    logger.info(f"YAML配置已保存到 {config_path}")
+                else:
+                    json.dump(config, f, indent=4)
+                    logger.info(f"JSON配置已保存到 {config_path}")
         except Exception as e:
             logger.error(f"保存配置失败: {e}")
             raise
@@ -66,7 +78,7 @@ class ConfigManager:
 
         Returns:
             表示有效性的布尔值
-            
+
         Configuration Options:
             - 'signal_output': 信号输出方式，支持 'dingtalk' (钉钉通知) 或 'console' (命令行打印)
         """
