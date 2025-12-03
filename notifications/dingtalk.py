@@ -9,8 +9,6 @@ from typing import Any, Dict, Optional
 import requests
 from loguru import logger
 
-from utils.logger import setup_logger
-
 
 class DingTalkNotifier:
     """

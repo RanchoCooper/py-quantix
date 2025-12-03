@@ -121,6 +121,10 @@ class TrendFollowingStrategy(BaseStrategy):
             包含信号的评估结果
         """
         try:
+            # 检查是否有足够的数据
+            if len(klines) < self.period:
+                return {"action": "hold", "reason": f"数据不足，需要至少{self.period}条K线数据"}
+
             # 将K线数据转换为DataFrame
             df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume',
                                                'close_time', 'quote_asset_volume', 'number_of_trades',

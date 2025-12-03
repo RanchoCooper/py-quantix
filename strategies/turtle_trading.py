@@ -193,6 +193,11 @@ class TurtleTradingStrategy(BaseStrategy):
             包含动作和原因的字典
         """
         try:
+            # 检查是否有足够的数据
+            required_length = max(self.entry_period, self.exit_period, self.atr_period) + 1
+            if len(klines) < required_length:
+                return {"action": "hold", "reason": f"数据不足，需要至少{required_length}条K线数据"}
+
             # 将K线数据转换为DataFrame
             df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume',
                                                'close_time', 'quote_asset_volume', 'number_of_trades',

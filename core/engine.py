@@ -327,13 +327,8 @@ class TradingEngine:
                 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
             ])
 
-            # 转换数值类型
-            numeric_columns = ['open', 'high', 'low', 'close', 'volume']
-            for col in numeric_columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-
-            # 评估策略
-            signal = strategy.evaluate(df)
+            # 评估策略（传递原始klines数据而不是DataFrame）
+            signal = strategy.evaluate(klines)
 
             logger.info(f"交易对 {symbol} 的策略信号: {signal}")
             return signal

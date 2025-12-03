@@ -179,3 +179,4 @@ Thumbs.db
 # Config files
 config/config.json
 config/config.yaml
+backtest_results.json

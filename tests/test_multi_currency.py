@@ -119,11 +119,22 @@ class TestMultiCurrencySupport(unittest.TestCase):
         # 创建交易引擎实例
         engine = TradingEngine(self.config_file, mode="auto")
 
-        # 模拟市场数据
-        mock_klines = [
-            [1640995200000, "40000", "41000", "39000", "40500", "1000", 1640995259999, "40000000", 100, "500", "2000000", "0"],
-            [1640995260000, "40500", "41500", "40000", "41000", "1100", 1640995319999, "41000000", 110, "550", "2100000", "0"]
-        ]
+        # 模拟市场数据 (需要足够的数据点以满足策略需求)
+        mock_klines = []
+        base_timestamp = 1640995200000
+        base_price = 40000
+        for i in range(30):  # 生成30条数据以满足所有策略的需求
+            timestamp = base_timestamp + i * 60000  # 每分钟一条数据
+            open_price = str(base_price + i * 100)
+            high_price = str(base_price + i * 100 + 500)
+            low_price = str(base_price + i * 100 - 300)
+            close_price = str(base_price + i * 100 + 200)
+            volume = str(1000 + i * 100)
+            mock_klines.append([
+                timestamp, open_price, high_price, low_price, close_price, volume,
+                timestamp + 59999, str(int(volume) * 100), 100 + i, str(int(volume) // 2),
+                str(int(volume) * 50), "0"
+            ])
         engine._get_market_data = Mock(return_value=mock_klines)
 
         # 模拟策略评估结果
@@ -150,11 +161,22 @@ class TestMultiCurrencySupport(unittest.TestCase):
         # 创建交易引擎实例
         engine = TradingEngine(self.config_file, mode="auto")
 
-        # 模拟市场数据
-        mock_klines = [
-            [1640995200000, "40000", "41000", "39000", "40500", "1000", 1640995259999, "40000000", 100, "500", "2000000", "0"],
-            [1640995260000, "40500", "41500", "40000", "41000", "1100", 1640995319999, "41000000", 110, "550", "2100000", "0"]
-        ]
+        # 模拟市场数据 (需要足够的数据点以满足策略需求)
+        mock_klines = []
+        base_timestamp = 1640995200000
+        base_price = 40000
+        for i in range(30):  # 生成30条数据以满足所有策略的需求
+            timestamp = base_timestamp + i * 60000  # 每分钟一条数据
+            open_price = str(base_price + i * 100)
+            high_price = str(base_price + i * 100 + 500)
+            low_price = str(base_price + i * 100 - 300)
+            close_price = str(base_price + i * 100 + 200)
+            volume = str(1000 + i * 100)
+            mock_klines.append([
+                timestamp, open_price, high_price, low_price, close_price, volume,
+                timestamp + 59999, str(int(volume) * 100), 100 + i, str(int(volume) // 2),
+                str(int(volume) * 50), "0"
+            ])
         engine._get_market_data = Mock(return_value=mock_klines)
 
         # 模拟策略评估结果
@@ -222,10 +244,22 @@ class TestMultiCurrencySupport(unittest.TestCase):
         engine.last_signals = {"BNBUSDT": None}
         engine.positions = {"BNBUSDT": {}}
 
-        # 模拟市场数据和策略信号
-        mock_klines = [
-            [1640995200000, "40000", "41000", "39000", "40500", "1000", 1640995259999, "40000000", 100, "500", "2000000", "0"]
-        ]
+        # 模拟市场数据 (需要足够的数据点以满足策略需求)
+        mock_klines = []
+        base_timestamp = 1640995200000
+        base_price = 40000
+        for i in range(30):  # 生成30条数据以满足所有策略的需求
+            timestamp = base_timestamp + i * 60000  # 每分钟一条数据
+            open_price = str(base_price + i * 100)
+            high_price = str(base_price + i * 100 + 500)
+            low_price = str(base_price + i * 100 - 300)
+            close_price = str(base_price + i * 100 + 200)
+            volume = str(1000 + i * 100)
+            mock_klines.append([
+                timestamp, open_price, high_price, low_price, close_price, volume,
+                timestamp + 59999, str(int(volume) * 100), 100 + i, str(int(volume) // 2),
+                str(int(volume) * 50), "0"
+            ])
         engine._get_market_data = Mock(return_value=mock_klines)
 
         mock_signal = {"action": "buy", "price": 41000, "reason": "买入信号"}
@@ -262,10 +296,22 @@ class TestMultiCurrencySupport(unittest.TestCase):
         # 创建交易引擎实例
         engine = TradingEngine(self.config_file, mode="auto")
 
-        # 模拟市场数据和策略信号
-        mock_klines = [
-            [1640995200000, "40000", "41000", "39000", "40500", "1000", 1640995259999, "40000000", 100, "500", "2000000", "0"]
-        ]
+        # 模拟市场数据 (需要足够的数据点以满足策略需求)
+        mock_klines = []
+        base_timestamp = 1640995200000
+        base_price = 40000
+        for i in range(30):  # 生成30条数据以满足所有策略的需求
+            timestamp = base_timestamp + i * 60000  # 每分钟一条数据
+            open_price = str(base_price + i * 100)
+            high_price = str(base_price + i * 100 + 500)
+            low_price = str(base_price + i * 100 - 300)
+            close_price = str(base_price + i * 100 + 200)
+            volume = str(1000 + i * 100)
+            mock_klines.append([
+                timestamp, open_price, high_price, low_price, close_price, volume,
+                timestamp + 59999, str(int(volume) * 100), 100 + i, str(int(volume) // 2),
+                str(int(volume) * 50), "0"
+            ])
         engine._get_market_data = Mock(return_value=mock_klines)
 
         mock_signal_bnb = {"action": "buy", "price": 41000, "reason": "BNB买入信号"}
