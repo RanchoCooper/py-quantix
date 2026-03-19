@@ -17,6 +17,8 @@ class TurtleTradingStrategy(BaseStrategy):
     4. 头寸规模：根据ATR调整头寸规模
     """
 
+    MIN_PERIOD = 20
+
     def __init__(self, **kwargs):
         """
         初始化海龟交易策略
@@ -36,30 +38,16 @@ class TurtleTradingStrategy(BaseStrategy):
             f"出场周期={self.exit_period}，ATR周期={self.atr_period}"
         )
 
-    def calculate_indicators(self, klines: List[List]) -> pd.DataFrame:
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         计算海龟交易策略所需的技术指标
 
         Args:
-            klines: 来自币安API的K线数据
+            df: 包含K线数据的DataFrame
 
         Returns:
             包含所有技术指标的DataFrame
         """
-        # 将klines转换为DataFrame
-        df = pd.DataFrame(klines, columns=[
-            'timestamp', 'open', 'high', 'low', 'close', 'volume',
-            'close_time', 'quote_asset_volume', 'number_of_trades',
-            'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
-        ])
-
-        # 转换为数值
-        df['open'] = pd.to_numeric(df['open'])
-        df['high'] = pd.to_numeric(df['high'])
-        df['low'] = pd.to_numeric(df['low'])
-        df['close'] = pd.to_numeric(df['close'])
-        df['volume'] = pd.to_numeric(df['volume'])
-
         # 需要有足够的数据进行所有计算
         required_length = max(self.entry_period, self.exit_period, self.atr_period) + 1
         if len(df) < required_length:
@@ -179,47 +167,3 @@ class TurtleTradingStrategy(BaseStrategy):
             }
         else:
             return {"action": "hold", "reason": "无明显突破信号"}
-
-
-
-    def evaluate(self, klines: List[List]) -> Dict[str, Any]:
-        """
-        评估策略并生成交易信号
-
-        Args:
-            klines: K线数据 [[timestamp, open, high, low, close, volume], ...]
-
-        Returns:
-            包含动作和原因的字典
-        """
-        try:
-            # 检查是否有足够的数据
-            required_length = max(self.entry_period, self.exit_period, self.atr_period) + 1
-            if len(klines) < required_length:
-                return {"action": "hold", "reason": f"数据不足，需要至少{required_length}条K线数据"}
-
-            # 将K线数据转换为DataFrame
-            df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume',
-                                               'close_time', 'quote_asset_volume', 'number_of_trades',
-                                               'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
-            df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
-
-            indicators = self.calculate_indicators(df)
-            signals = self.generate_signals(indicators)
-            return signals
-        except Exception as e:
-            logger.error(f"海龟交易策略评估错误: {str(e)}")
-            return {"action": "hold", "reason": f"评估错误: {str(e)}"}
-
-
-# 示例用法
-if __name__ == "__main__":
-    # 示例K线数据（实际应用中来自币安API）
-    sample_klines = [
-        [1617590400000, "57648.57", "57715.00", "57560.00", "57663.21", "305.94734000", 1617590699999, "17644864.26770240", 1234, "153.23582000", "8827865.18270240", "0"],
-        # ... 更多K线数据
-    ]
-
-    strategy = TurtleTradingStrategy(entry_period=20, exit_period=10, atr_period=20)
-    result = strategy.evaluate(sample_klines)
-    print("策略结果:", result)

@@ -15,6 +15,8 @@ class MeanReversionStrategy(BaseStrategy):
     当价格触及布林带上轨且RSI处于超买区域时产生卖出信号。
     """
 
+    MIN_PERIOD = 30
+
     def __init__(self, **kwargs):
         """
         初始化均值回归策略
@@ -36,48 +38,16 @@ class MeanReversionStrategy(BaseStrategy):
         self.std_dev_multiplier = kwargs.get('std_dev_multiplier', 2.0)
         logger.info(f"均值回归策略初始化，周期={self.period}，标准差乘数={self.std_dev_multiplier}")
 
-    def calculate_indicators(self, klines: List[List]) -> pd.DataFrame:
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         为均值回归策略计算技术指标（布林带和RSI）
 
         Args:
-            klines (List[List]): 来自币安API的K线数据，每个元素包含：
-                [开盘时间, 开盘价, 最高价, 最低价, 收盘价, 成交量, ...]
+            df: 包含K线数据的DataFrame
 
         Returns:
-            pd.DataFrame: 包含计算指标的DataFrame，列包括：
-                - timestamp: 开盘时间
-                - open: 开盘价
-                - high: 最高价
-                - low: 最低价
-                - close: 收盘价
-                - volume: 成交量
-                - ma: 移动平均线
-                - upper_band: 布林带上轨
-                - lower_band: 布林带下轨
-                - rsi: 相对强弱指数
-
-        Example:
-            >>> klines = [[1617590400000, "57648.57", "57715.00", "57560.00", "57663.21", "305.94734000", ...]]
-            >>> df = strategy.calculate_indicators(klines)
-            >>> print(df[['close', 'ma', 'rsi']].tail(1))
-                  close        ma    rsi
-            0  57663.21  57500.15  45.32
+            pd.DataFrame: 包含计算指标的DataFrame
         """
-        # 将klines转换为DataFrame
-        df = pd.DataFrame(klines, columns=[
-            'timestamp', 'open', 'high', 'low', 'close', 'volume',
-            'close_time', 'quote_asset_volume', 'number_of_trades',
-            'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
-        ])
-
-        # 转换为数值
-        df['open'] = pd.to_numeric(df['open'])
-        df['high'] = pd.to_numeric(df['high'])
-        df['low'] = pd.to_numeric(df['low'])
-        df['close'] = pd.to_numeric(df['close'])
-        df['volume'] = pd.to_numeric(df['volume'])
-
         # 计算移动平均线和标准差
         df['ma'] = df['close'].rolling(window=self.period).mean()
         df['std'] = df['close'].rolling(window=self.period).std()
@@ -145,49 +115,3 @@ class MeanReversionStrategy(BaseStrategy):
             }
 
         return {"action": "hold", "reason": "无明确信号"}
-
-    def evaluate(self, klines: List[List]) -> Dict[str, Any]:
-        """
-        基于K线数据评估策略并生成交易信号
-
-        Args:
-            klines (List[List]): 来自币安API的K线数据
-
-        Returns:
-            Dict[str, Any]: 包含信号的评估结果
-
-        Example:
-            >>> signal = strategy.evaluate(klines)
-            >>> print(signal['action'])
-            hold
-        """
-        try:
-            # 检查是否有足够的数据
-            if len(klines) < self.period:
-                return {"action": "hold", "reason": f"数据不足，需要至少{self.period}条K线数据"}
-
-            # 将K线数据转换为DataFrame
-            df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume',
-                                               'close_time', 'quote_asset_volume', 'number_of_trades',
-                                               'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
-            df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
-
-            df = self.calculate_indicators(df)
-            signal = self.generate_signals(df)
-            return signal
-        except Exception as e:
-            logger.error(f"评估均值回归策略时出错: {e}")
-            return {"action": "hold", "reason": f"错误: {str(e)}"}
-
-
-# 示例用法
-if __name__ == "__main__":
-    # 示例K线数据（实际应用中来自币安API）
-    sample_klines = [
-        [1617590400000, "57648.57", "57715.00", "57560.00", "57663.21", "305.94734000", 1617590699999, "17644864.26770240", 1234, "153.23582000", "8827865.18270240", "0"],
-        # ... 更多K线数据
-    ]
-
-    strategy = MeanReversionStrategy(period=20, std_dev_multiplier=2.0)
-    result = strategy.evaluate(sample_klines)
-    print("策略结果:", result)

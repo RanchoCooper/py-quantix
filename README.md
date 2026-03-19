@@ -1,263 +1,231 @@
-# 加密货币合约量化交易系统
+# PyQuantX - 加密货币量化交易系统
 
-[![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-一个功能全面的加密货币合约量化交易系统，包含多种交易策略、风险管理和回测功能。该系统支持币安合约交易平台，具备自动交易和监控模式，适用于算法交易研究和实盘部署。
+一个功能完善的加密货币合约量化交易系统，支持策略交易、市场分析、实时监控和回测。
 
 ## 功能特性
 
-- **多种交易策略**：
-  - 趋势跟踪策略：使用移动平均线和动量指标识别市场趋势
-  - 均值回归策略：基于布林带和RSI指标进行反向交易
-  - 海龟交易策略：经典突破策略，基于唐奇安通道和ATR仓位管理
-- **实时交易**：与币安合约API深度集成，支持实盘和测试网环境
-- **风险管理**：灵活的仓位规模控制和杠杆设置，支持多币种独立配置
-- **通知系统**：钉钉机器人集成，实时推送交易信号和系统状态
-- **回测功能**：历史数据测试框架，支持策略性能评估和优化
-- **日志记录**：基于Loguru的高级日志系统，支持多级别和文件输出
-- **配置管理**：基于JSON的配置系统，支持多币种和策略的个性化配置
-- **测试支持**：全面的单元测试和策略验证机制，确保系统稳定性
+### 核心功能
+- **多模式运行**：支持监控模式（monitor）和市场分析模式（analyser）
+- **策略交易**：趋势跟踪、均值回归、海龟交易等多种策略
+- **市场分析**：集成大语言模型（LLM）进行 K 线数据分析
+- **实时监控**：自动评估交易信号，推送通知
+
+### 通知渠道
+- **终端输出**：控制台实时显示交易信号
+- **钉钉机器人**：群聊推送交易警报
+- **飞书机器人**：富文本/卡片消息推送
+
+### 数据支持
+- **K线数据**：支持多个交易对、多种时间周期
+- **技术指标**：MA、ATR、布林带、RSI 等
+- **数据格式化**：适合 LLM 分析的文本格式
 
 ## 环境要求
 
-- Python 3.7+
-- pip (Python包管理器)
-- 币安合约账户（实盘交易）或测试网账户（测试环境）
-- 钉钉机器人（可选，用于通知）
+- Python 3.8+
+- 币安合约账户（测试网/实盘）
 
-## 安装步骤
+## 快速开始
 
-1. 克隆代码仓库：
-   ```bash
-   git clone <repository-url>
-   cd py-quantix
-   ```
-
-2. 创建虚拟环境（推荐）：
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Windows系统使用: venv\Scripts\activate
-   ```
-
-3. 安装依赖：
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. 验证安装：
-   ```bash
-   python -c "import numpy, pandas, requests; print('依赖安装成功')"
-   ```
-
-## 配置说明
-
-系统支持JSON和YAML两种格式的配置文件。
-
-1. 复制示例配置文件（选择一种格式）：
-   ```bash
-   # 可以使用JSON或YAML格式的配置文件
-   cp config/config.example.json config/config.json
-   # 或者
-   cp config/config.example.yaml config/config.yaml
-   ```
-
-2. 编辑配置文件，配置以下参数：
-
-   ### 币安API设置
-   - `api_key`: 币安合约API密钥
-   - `api_secret`: 币安合约API密钥
-   - `testnet`: 是否使用测试网（`true`为测试网，`false`为实盘）
-
-   ### 交易设置
-   - `symbols`: 交易对配置
-     - `leverage`: 杠杆倍数
-     - `position_size`: 仓位大小
-     - `strategy`: 使用的策略名称
-     - `strategy_params`: 策略特定参数
-   - `signal_output`: 信号输出方式，支持 "dingtalk" (钉钉通知) 或 "console" (命令行打印)
-
-   ### 策略全局参数
-   - 各策略的默认参数设置
-
-   ### 通知设置
-   - 钉钉机器人的webhook URL和密钥
-
-   ### 日志设置
-   - 日志级别和日志文件路径
-
-## 使用方法
-
-### 运行交易系统
+### 1. 安装依赖
 
 ```bash
-python main.py
+pip install -r requirements.txt
 ```
 
-#### 运行模式
-系统支持两种运行模式：
-- **自动模式**（默认）：自动执行交易信号
-- **监控模式**：仅发送通知，不执行实际交易
+### 2. 配置系统
 
-#### 命令行选项：
-- `--config CONFIG`：配置文件路径（默认：config/config.json，支持JSON和YAML格式）
-- `--once`：执行一次策略评估后退出
-- `--interval INTERVAL`：评估间隔秒数（默认：3600）
-- `--log-level {DEBUG,INFO,WARNING,ERROR}`：日志级别（默认：INFO）
-- `--mode {auto,monitor}`：运行模式（默认：auto）
+复制示例配置并编辑：
 
-#### 示例命令：
 ```bash
-# 使用默认配置运行自动交易模式
+cp config/config.example.yaml config/config.yaml
+```
+
+编辑 `config.yaml`：
+
+```yaml
+# 运行模式: monitor (监控交易) / analyser (市场分析)
+run_mode: monitor
+
+# 信号输出: console, dingtalk, feishu (可多选)
+signal_output:
+  - console
+  - feishu
+
+binance:
+  api_key: your_api_key
+  api_secret: your_api_secret
+  testnet: true
+
+trading:
+  symbols:
+    - symbol: BTCUSDT
+      leverage: 10
+      position_size: 0.001
+      strategy: trend_following
+
+notifications:
+  dingtalk:
+    webhook_url: https://oapi.dingtalk.com/robot/send?access_token=xxx
+    secret: xxx
+  feishu:
+    webhook_url: https://open.feishu.cn/open-apis/bot/v2/hook/xxx
+    secret: xxx
+
+llm:
+  enabled: true
+  api_key: your_minimax_api_key
+  model: "Claude Opus-4.6"
+```
+
+### 3. 运行系统
+
+```bash
+# 默认从配置文件读取模式
 python main.py
 
-# 使用自定义配置文件运行
-python main.py --config config/my_config.json
+# 覆盖为监控模式（不执行交易，只发通知）
+python main.py --mode monitor
 
-# 以监控模式运行，每30分钟评估一次
-python main.py --mode monitor --interval 1800
+# 覆盖为分析模式（LLM 分析 + 推送）
+python main.py --mode analyser
 
-# 执行一次策略评估后退出
+# 运行一次后退出
 python main.py --once
+
+# 自定义轮询间隔（秒）
+python main.py --interval 1800
 ```
 
-### 回测运行
+## 使用说明
+
+### 运行模式
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| `monitor` | 评估策略信号，发送通知 | 策略监控、信号推送 |
+| `analyser` | 获取 K 线 → LLM 分析 → 推送结果 | 市场分析、研究辅助 |
+
+### 命令行参数
 
 ```bash
-python backtest_example.py
+python main.py --help
+
+Options:
+  --config CONFIG       配置文件路径
+  --mode {auto,monitor,analyser}  运行模式
+  --once               运行一次后退出
+  --interval INTERVAL  轮询间隔（秒）
+  --log-level LEVEL    日志级别
 ```
 
-此命令将对所有策略进行历史数据回测，并将结果输出到 `backtest_results.json` 文件。
+### 配置文件
 
-#### 回测配置
-回测脚本会根据配置文件中的参数进行测试，包括：
-- 数据范围和时间周期
-- 初始资金和手续费设置
-- 各策略的参数配置
+支持 YAML 和 JSON 格式，关键配置项：
 
-#### 回测结果
-回测完成后，结果将保存在 `backtest_results.json` 文件中，包含：
-- 策略收益率和夏普比率
-- 最大回撤和胜率统计
-- 交易次数和平均收益
+```yaml
+run_mode: monitor          # 运行模式
+signal_output: [console]   # 输出渠道
 
-### 测试运行
-
-#### 运行单元测试：
-```bash
-python tests/test_unit.py
+binance:                   # 币安 API
+trading:                   # 交易配置
+notifications:              # 通知渠道
+llm:                       # LLM 分析配置
+market_data:               # K线数据配置
 ```
-
-#### 验证策略导入：
-```bash
-python tests/test_strategies.py
-```
-
-#### 运行演示：
-```bash
-python demo.py
-```
-
-#### 测试钉钉通知：
-```bash
-python tests/test_dingtalk_message.py
-```
-
-#### 测试所有功能：
-```bash
-python -m pytest tests/
-```
-
-这些测试可以帮助验证系统各组件是否正常工作，特别是在修改代码后确保没有破坏现有功能。
 
 ## 项目结构
 
 ```
 py-quantix/
-├── backtest_example.py        # 回测实现
-├── backtest_results.json      # 回测结果文件
+├── main.py                      # 程序入口
 ├── config/
-│   ├── config.example.json    # JSON格式示例配置文件
-│   ├── config.example.yaml    # YAML格式示例配置文件
-│   └── config.json            # 实际配置文件（不在仓库中）
+│   ├── config.example.yaml      # 配置示例
+│   └── config.yaml             # 实际配置
 ├── core/
-│   ├── __init__.py
-│   ├── binance_client.py      # 币安合约API客户端
-│   └── engine.py              # 主交易引擎
-├── data/
-│   └── __init__.py
-├── demo.py                    # 系统演示
-├── main.py                    # 程序入口
-├── notifications/
-│   ├── __init__.py
-│   └── dingtalk.py            # 钉钉通知服务
-├── README.md                  # 项目说明文件
-├── requirements.txt           # Python依赖
+│   ├── engine.py               # 交易引擎 + 工厂函数
+│   ├── analyser_runner.py      # 市场分析器
+│   ├── analyzer.py             # LLM 分析模块
+│   ├── binance_client.py       # 币安 API 客户端
+│   └── backtester.py           # 回测模块
 ├── strategies/
-│   ├── __init__.py
-│   ├── base_strategy.py       # 策略基类
-│   ├── mean_reversion.py      # 均值回归策略
-│   ├── trend_following.py     # 趋势跟踪策略
-│   └── turtle_trading.py      # 海龟交易策略
-├── SUMMARY.md                 # 项目摘要
+│   ├── base_strategy.py        # 策略基类
+│   ├── trend_following.py      # 趋势跟踪
+│   ├── mean_reversion.py       # 均值回归
+│   └── turtle_trading.py       # 海龟交易
+├── notifications/
+│   ├── dingtalk.py             # 钉钉通知
+│   └── feishu.py               # 飞书通知
 └── utils/
-    ├── __init__.py
-    ├── config_manager.py      # 配置工具
-    └── logger.py              # 日志工具
-```
-
-### 测试目录结构
-```
-tests/
-├── __init__.py
-├── test_dingtalk.py           # 钉钉通知测试
-├── test_dingtalk_message.py   # 钉钉消息测试
-├── test_modes.py              # 运行模式测试
-├── test_multi_currency.py     # 多币种交易测试
-├── test_strategies.py         # 策略导入/验证测试
-└── test_unit.py               # 单元测试
+    ├── config_manager.py        # 配置管理
+    ├── data_formatter.py       # 数据格式化
+    └── logger.py               # 日志工具
 ```
 
 ## 交易策略
 
-所有交易策略都继承自`BaseStrategy`抽象基类，该基类提供了统一的接口和通用的功能实现。
+### 趋势跟踪策略 (TrendFollowing)
+- 基于移动平均线交叉 + 动量指标
+- 入场：短均线金叉且动量为正
+- 止损止盈：基于 ATR 动态计算
 
-### BaseStrategy 基类
-所有交易策略的基类，定义了统一的接口：
-- `calculate_indicators()`: 计算策略所需的技术指标
-- `generate_signals()`: 基于指标生成交易信号
-- `evaluate()`: 评估K线数据并返回交易信号（可被子类重写）
+### 均值回归策略 (MeanReversion)
+- 基于布林带识别超买超卖
+- 入场：价格突破布林带上下轨
+- 风险管理：固定比例仓位
 
-### 趋势跟踪策略
-使用移动平均线和动量指标来识别并跟随市场趋势。
-- **技术指标**：短期和长期移动平均线、ATR（平均真实波幅）、动量指标
-- **入场信号**：短期均线上穿长期均线且动量为正时做多，反之则做空
-- **出场信号**：短期均线下穿长期均线或止损止盈条件触发
-- **风险管理**：基于ATR动态设置止损和止盈水平
+### 海龟交易策略 (TurtleTrading)
+- 基于唐奇安通道突破
+- 入场：价格突破 N 日最高/最低
+- 仓位管理：基于 ATR 动态调整
 
-### 均值回归策略
-通过布林带和RSI指标识别超买/超卖状态，并针对极端价格波动进行反向交易。
-- **技术指标**：布林带（移动平均线±标准差×倍数）、RSI（相对强弱指数）
-- **入场信号**：价格突破布林带下轨且RSI<30时做多；价格突破布林带上轨且RSI>70时做空
-- **出场信号**：价格回归到移动平均线附近或止损条件触发
-- **风险管理**：固定比例仓位管理，严格控制单笔交易风险
+## API 集成
 
-### 海龟交易策略
-经典的突破策略，基于唐奇安通道和ATR的仓位管理。
-- **技术指标**：唐奇安通道（最高高价和最低低价）、ATR（平均真实波幅）
-- **入场信号**：价格突破过去N天的最高价时做多，突破过去N天的最低价时做空
-- **出场信号**：价格反向突破过去M天的最低价/最高价时平仓
-- **风险管理**：基于ATR动态调整仓位大小，确保每笔交易风险一致
+### 市场数据分析
 
-## 风险声明
+```python
+from core.binance_client import BinanceMarketData
+from utils.data_formatter import DataFormatter
+from core.analyzer import MarketAnalyzer
 
-交易加密货币及其衍生品具有重大风险，可能导致严重的财务损失。本系统仅供教育和研究目的，不构成任何投资建议。
+# 获取数据
+fetcher = BinanceMarketData()
+klines = fetcher.get_klines("BTCUSDT", "1h", 100)
 
-### 重要提醒
+# 格式化
+formatter = DataFormatter()
+formatted = formatter.format_for_analysis("BTCUSDT", klines, "1h")
 
-1. **实盘交易风险**：在使用本系统进行实盘交易之前，请确保您完全理解其工作原理，并进行了充分的测试。
-2. **资金管理**：请勿投入超出承受能力的资金，建议使用测试网环境进行充分验证后再考虑实盘交易。
-3. **技术风险**：系统可能存在未发现的bug或错误，使用时请保持谨慎。
-4. **市场风险**：加密货币市场波动极大，任何交易策略都无法保证盈利。
+# LLM 分析
+analyzer = MarketAnalyzer()
+result = analyzer.analyze("BTCUSDT", formatted)
+```
 
-本系统作者不对因使用本系统而导致的任何损失负责。在决定使用本系统进行交易之前，请仔细考虑您的投资目标、经验水平和风险承受能力。
+### 通知发送
+
+```python
+from notifications.feishu import FeishuNotifier
+from notifications.dingtalk import DingTalkNotifier
+
+# 飞书通知
+feishu = FeishuNotifier(webhook_url="xxx", secret="xxx")
+feishu.send_analysis_report("BTCUSDT", analysis_result, "bull")
+
+# 钉钉通知
+dingtalk = DingTalkNotifier(webhook_url="xxx", secret="xxx")
+dingtalk.send_trade_notification("BTCUSDT", "buy", 50000.0)
+```
+
+## 风险提示
+
+⚠️ 加密货币交易具有高风险，请确保：
+
+1. 仅使用可承受损失的资金
+2. 充分测试后再实盘
+3. 理解每个策略的风险特征
+4. 定期监控和调整策略参数
+
+本系统仅供学习和研究，不构成投资建议。

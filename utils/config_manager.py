@@ -9,14 +9,16 @@ from loguru import logger
 class ConfigManager:
     """
     配置管理器，用于加载、验证和管理交易系统的配置
-    支持YAML和JSON格式的配置文件
+    支持YAML和JSON格式的配置文件，支持环境变量覆盖
     """
 
     # 支持的策略列表
     SUPPORTED_STRATEGIES = ['trend_following', 'mean_reversion', 'turtle_trading']
+    # 支持的运行模式
+    SUPPORTED_RUN_MODES = ['monitor', 'analyser']
 
     @staticmethod
-    def load_config(config_path: str) -> Dict[str, Any]:
+    def load_config(config_path: str, use_env: bool = True) -> Dict[str, Any]:
         """
         从文件加载配置，支持YAML和JSON格式
 
@@ -73,8 +75,19 @@ class ConfigManager:
             ...     logger.info("配置验证通过")
         """
         try:
-            # 检查必需的顶级字段
-            required_fields = ['binance', 'trading', 'strategies', 'notifications']
+            # 检查运行模式
+            run_mode = config.get('run_mode', 'monitor')
+            if run_mode not in ConfigManager.SUPPORTED_RUN_MODES:
+                logger.error(f"无效的运行模式: {run_mode}，支持的模式: {ConfigManager.SUPPORTED_RUN_MODES}")
+                return False
+            logger.info(f"运行模式: {run_mode}")
+
+            # 检查必需的顶级字段（analyser 模式只需要 notifications）
+            if run_mode == 'monitor':
+                required_fields = ['binance', 'trading', 'strategies', 'notifications']
+            else:  # analyser 模式
+                required_fields = ['notifications', 'llm', 'market_data']
+
             for field in required_fields:
                 if field not in config:
                     logger.error(f"缺少必需的配置字段: {field}")
@@ -89,17 +102,28 @@ class ConfigManager:
                 logger.error("无效的币安API密钥")
                 return False
             if 'testnet' not in binance_config:
-                logger.warning("未设置testnet字段，默认为False")
-                config['binance']['testnet'] = False
+                logger.warning("未设置testnet字段，默认为True")
+                config['binance']['testnet'] = True
 
             # 验证交易配置
             trading_config = config['trading']
-            if 'symbols' not in trading_config or not isinstance(trading_config['symbols'], dict):
-                logger.error("无效的交易配置")
+            if 'symbols' not in trading_config:
+                logger.error("无效的交易配置: 缺少 symbols 字段")
+                return False
+
+            # 支持列表和字典两种格式
+            symbols = trading_config['symbols']
+            if isinstance(symbols, list):
+                symbol_list = symbols
+            elif isinstance(symbols, dict):
+                symbol_list = [{'symbol': k, **v} for k, v in symbols.items()]
+            else:
+                logger.error("无效的交易配置: symbols 必须是列表或字典")
                 return False
 
             # 验证每个交易对配置
-            for symbol, symbol_config in trading_config['symbols'].items():
+            for symbol_config in symbol_list:
+                symbol = symbol_config.get('symbol', 'UNKNOWN')
                 if not isinstance(symbol_config, dict):
                     logger.error(f"交易对 {symbol} 的配置无效")
                     return False

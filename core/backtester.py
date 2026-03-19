@@ -4,6 +4,7 @@ import pandas as pd
 from loguru import logger
 
 from core.binance_client import BinanceFuturesClient
+from utils.config_manager import ConfigManager
 
 
 class Backtester:
@@ -18,21 +19,18 @@ class Backtester:
         Args:
             config_path (str): 配置文件路径
         """
-        # 加载配置
-        try:
-            import yaml
-            with open(config_path, 'r') as f:
-                self.config = yaml.safe_load(f)
-        except Exception as e:
-            logger.error(f"加载配置失败: {e}")
-            raise
+        # 使用 ConfigManager 加载配置（支持环境变量覆盖）
+        self.config = ConfigManager.load_config(config_path, use_env=True)
 
         # 初始化币安客户端
         binance_config = self.config['binance']
+        proxy = binance_config.get('proxy', {})
         self.client = BinanceFuturesClient(
             api_key=binance_config['api_key'],
             api_secret=binance_config['api_secret'],
-            testnet=binance_config['testnet']
+            testnet=binance_config['testnet'],
+            proxy_http=proxy.get('http'),
+            proxy_https=proxy.get('https')
         )
 
         logger.info("回测器初始化完成")

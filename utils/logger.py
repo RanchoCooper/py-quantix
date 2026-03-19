@@ -23,8 +23,10 @@ def setup_logger(log_level: str = "INFO", log_file: str = "logs/trading.log"):
         colorize=True
     )
 
-    # 如果日志目录不存在则创建
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    # 获取日志文件目录并创建（如果不存在）
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
 
     # 添加文件处理器
     logger.add(
@@ -32,7 +34,8 @@ def setup_logger(log_level: str = "INFO", log_file: str = "logs/trading.log"):
         rotation="10 MB",
         retention="30 days",
         level=log_level,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}",
+        enqueue=True  # 线程安全写入
     )
 
     logger.info(f"日志记录器已初始化，级别 {log_level}")
