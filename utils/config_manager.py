@@ -5,6 +5,8 @@ from typing import Any, Dict
 import yaml
 from loguru import logger
 
+from utils.symbol_parser import parse_symbol_config, get_symbol_list
+
 
 class ConfigManager:
     """
@@ -15,7 +17,7 @@ class ConfigManager:
     # 支持的策略列表
     SUPPORTED_STRATEGIES = ['trend_following', 'mean_reversion', 'turtle_trading']
     # 支持的运行模式
-    SUPPORTED_RUN_MODES = ['monitor', 'analyser']
+    SUPPORTED_RUN_MODES = ['monitor', 'analyzer']
 
     @staticmethod
     def load_config(config_path: str, use_env: bool = True) -> Dict[str, Any]:
@@ -82,10 +84,10 @@ class ConfigManager:
                 return False
             logger.info(f"运行模式: {run_mode}")
 
-            # 检查必需的顶级字段（analyser 模式只需要 notifications）
+            # 检查必需的顶级字段（analyzer 模式只需要 notifications）
             if run_mode == 'monitor':
                 required_fields = ['binance', 'trading', 'strategies', 'notifications']
-            else:  # analyser 模式
+            else:  # analyzer 模式
                 required_fields = ['notifications', 'llm', 'market_data']
 
             for field in required_fields:
@@ -111,14 +113,12 @@ class ConfigManager:
                 logger.error("无效的交易配置: 缺少 symbols 字段")
                 return False
 
-            # 支持列表和字典两种格式
+            # 使用统一的符号配置解析函数
             symbols = trading_config['symbols']
-            if isinstance(symbols, list):
-                symbol_list = symbols
-            elif isinstance(symbols, dict):
-                symbol_list = [{'symbol': k, **v} for k, v in symbols.items()]
-            else:
-                logger.error("无效的交易配置: symbols 必须是列表或字典")
+            symbol_list = parse_symbol_config(symbols)
+
+            if not symbol_list:
+                logger.error("无效的交易配置: symbols 解析失败")
                 return False
 
             # 验证每个交易对配置

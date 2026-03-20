@@ -1,8 +1,18 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from loguru import logger
+
+from utils.indicators import (
+    calculate_atr,
+    calculate_bollinger_bands,
+    calculate_rsi,
+    calculate_ma,
+    calculate_momentum,
+    calculate_donchian_channel,
+    calculate_all_indicators,
+)
 
 # K线列名常量
 KLINE_COLUMNS = ['timestamp', 'open', 'high', 'low', 'close', 'volume',
@@ -13,20 +23,44 @@ KLINE_COLUMNS = ['timestamp', 'open', 'high', 'low', 'close', 'volume',
 class BaseStrategy(ABC):
     """
     所有交易策略的抽象基类
+
+    支持两种模式：
+    1. evaluate(klines): 批量处理K线（原有模式）
+    2. on_candle(candle): 单根K线处理（新模式，事件驱动）
     """
 
     # 子类需要定义最小数据周期
     MIN_PERIOD = 1
 
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        symbol: Optional[str] = None,
+        timeframe: str = "1h",
+        **kwargs
+    ):
         """
         初始化策略基类
 
         Args:
+            name: 策略名称
+            symbol: 交易对
+            timeframe: 时间周期
             **kwargs: 策略参数
         """
+        self.name = name or self.__class__.__name__
+        self.symbol = symbol
+        self.timeframe = timeframe
         self.params = kwargs
-        logger.info(f"{self.__class__.__name__} 策略初始化")
+
+        # 状态
+        self.position: Optional[Any] = None
+        self.is_initialized = False
+
+        # 指标数据
+        self.data: Optional[pd.DataFrame] = None
+
+        logger.info(f"{self.name} 策略初始化, symbol={symbol}, timeframe={timeframe}")
 
     @staticmethod
     def convert_klines_to_dataframe(klines: List) -> pd.DataFrame:
@@ -116,3 +150,49 @@ class BaseStrategy(ABC):
         except Exception as e:
             logger.error(f"评估策略 {self.__class__.__name__} 时出错: {e}")
             return {"action": "hold", "reason": f"错误: {str(e)}"}
+
+    def update_data(self, df: pd.DataFrame):
+        """
+        更新数据
+
+        Args:
+            df: K线数据 DataFrame
+        """
+        self.data = df
+        self.is_initialized = len(df) > 0
+
+    def update_position(self, position: Optional[Any]):
+        """更新持仓信息"""
+        self.position = position
+
+    def on_candle(self, candle: List) -> Optional[Dict[str, Any]]:
+        """
+        处理新的K线数据（事件驱动模式）
+
+        Args:
+            candle: K线数据 [timestamp, open, high, low, close, volume]
+
+        Returns:
+            交易信号字典或None
+        """
+        # 子类可以重写此方法实现事件驱动
+        return None
+
+    def get_signals(self) -> Optional[Dict[str, Any]]:
+        """
+        获取当前交易信号
+
+        Returns:
+            交易信号字典或None
+        """
+        # 子类可以重写此方法
+        if self.data is not None and len(self.data) >= self.MIN_PERIOD:
+            return self.generate_signals(self.data)
+        return None
+
+    def get_params(self, key: str, default: Any = None) -> Any:
+        """获取参数"""
+        return self.params.get(key, default)
+
+    def __repr__(self):
+        return f"Strategy({self.name}, {self.symbol}, {self.timeframe})"

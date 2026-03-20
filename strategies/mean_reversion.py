@@ -1,18 +1,28 @@
-from typing import Any, Dict, List
+"""
+均值回归策略
+基于布林带和RSI的均值回归策略
+"""
+from typing import Any, Dict
 
 import pandas as pd
 from loguru import logger
 
-from strategies.base_strategy import BaseStrategy
+from strategies.base_strategy import (
+    BaseStrategy,
+    calculate_bollinger_bands,
+    calculate_rsi,
+)
 
 
 class MeanReversionStrategy(BaseStrategy):
     """
     基于布林带和RSI的均值回归策略
 
-    该策略结合了布林带和相对强弱指数(RSI)来识别价格偏离均值的机会。
-    当价格触及布林带下轨且RSI处于超卖区域时产生买入信号，
-    当价格触及布林带上轨且RSI处于超买区域时产生卖出信号。
+    策略逻辑：
+    - 入场信号：当价格触及布林带下轨且RSI处于超卖区域（<30）时买入
+    - 出场信号：当价格触及布林带上轨且RSI处于超买区域（>70）时卖出
+
+    核心假设：价格会回归到均值（移动平均线）
     """
 
     MIN_PERIOD = 30
@@ -23,20 +33,22 @@ class MeanReversionStrategy(BaseStrategy):
 
         Args:
             kwargs: 策略参数字典
-                - period (int, optional): 计算移动平均线和标准差的周期. 默认为 20.
-                - std_dev_multiplier (float, optional): 标准差乘数（布林带宽度）. 默认为 2.0.
-
-        Attributes:
-            period (int): 计算周期
-            std_dev_multiplier (float): 标准差乘数
-
-        Example:
-            >>> strategy = MeanReversionStrategy(period=20, std_dev_multiplier=2.0)
-            >>> logger.info("均值回归策略初始化成功")
+                - period: 计算移动平均线和标准差的周期，默认为 20
+                - std_dev_multiplier: 标准差乘数（布林带宽度），默认为 2.0
+                - rsi_period: RSI 计算周期，默认为 14
+                - rsi_oversold: RSI 超卖阈值，默认为 30
+                - rsi_overbought: RSI 超买阈值，默认为 70
         """
         self.period = kwargs.get('period', 20)
         self.std_dev_multiplier = kwargs.get('std_dev_multiplier', 2.0)
-        logger.info(f"均值回归策略初始化，周期={self.period}，标准差乘数={self.std_dev_multiplier}")
+        self.rsi_period = kwargs.get('rsi_period', 14)
+        self.rsi_oversold = kwargs.get('rsi_oversold', 30)
+        self.rsi_overbought = kwargs.get('rsi_overbought', 70)
+        logger.info(
+            f"均值回归策略初始化，周期={self.period}，"
+            f"标准差乘数={self.std_dev_multiplier}，"
+            f"RSI周期={self.rsi_period}"
+        )
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -46,22 +58,19 @@ class MeanReversionStrategy(BaseStrategy):
             df: 包含K线数据的DataFrame
 
         Returns:
-            pd.DataFrame: 包含计算指标的DataFrame
+            包含计算指标的DataFrame
         """
-        # 计算移动平均线和标准差
-        df['ma'] = df['close'].rolling(window=self.period).mean()
-        df['std'] = df['close'].rolling(window=self.period).std()
+        df = df.copy()
 
         # 计算布林带
-        df['upper_band'] = df['ma'] + (df['std'] * self.std_dev_multiplier)
-        df['lower_band'] = df['ma'] - (df['std'] * self.std_dev_multiplier)
+        df = calculate_bollinger_bands(
+            df,
+            period=self.period,
+            std_multiplier=self.std_dev_multiplier
+        )
 
-        # 计算RSI
-        delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=self.period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean()
-        rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
+        # 计算 RSI
+        df = calculate_rsi(df, period=self.rsi_period)
 
         return df
 
@@ -70,48 +79,56 @@ class MeanReversionStrategy(BaseStrategy):
         基于均值回归指标生成买卖信号
 
         Args:
-            df (pd.DataFrame): 包含计算指标的DataFrame
+            df: 包含计算指标的DataFrame
 
         Returns:
-            Dict[str, Any]: 包含操作和元数据的信号字典，可能的键值：
-                - action (str): 操作指令 ('buy', 'sell', 'hold')
-                - reason (str): 信号产生的原因
-                - target_price (float, optional): 目标价格
-                - price (float, optional): 当前价格
+            包含操作和元数据的信号字典:
+                - action: 操作指令 ('buy', 'sell', 'hold')
+                - reason: 信号产生的原因
+                - target_price: 目标价格
+                - price: 当前价格
 
-        Signal Logic:
-            买入信号：当价格低于下轨且RSI < 30（超卖）
-            卖出信号：当价格高于上轨且RSI > 70（超买）
-            持有信号：其他情况
-
-        Example:
-            >>> signal = strategy.generate_signals(df)
-            >>> if signal['action'] == 'buy':
-            ...     print(f"买入信号: {signal['reason']}")
+        信号逻辑:
+            - 买入信号：价格低于下轨且RSI < rsi_oversold（超卖）
+            - 卖出信号：价格高于上轨且RSI > rsi_overbought（超买）
+            - 持有信号：其他情况
         """
         if len(df) < self.period:
             return {"action": "hold", "reason": "数据不足"}
 
+        # 检查必要字段
+        required_cols = ['upper_band', 'lower_band', 'rsi']
+        if not all(col in df.columns for col in required_cols):
+            return {"action": "hold", "reason": "指标计算不完整"}
+
         current = df.iloc[-1]
 
-        # 检查买入信号：价格低于下轨且RSI < 30（超卖）
-        if (current['close'] < current['lower_band'] and
-            current['rsi'] < 30):
+        # 检查是否有 NaN
+        if pd.isna(current.get('upper_band')) or pd.isna(current.get('rsi')):
+            return {"action": "hold", "reason": "指标数据不完整"}
+
+        close = current['close']
+        upper_band = current['upper_band']
+        lower_band = current['lower_band']
+        rsi = current['rsi']
+        ma = current.get('bb_ma', close)  # 布林带中轨作为均值
+
+        # 买入信号：价格低于下轨且RSI超卖
+        if close < lower_band and rsi < self.rsi_oversold:
             return {
                 "action": "buy",
-                "reason": "价格低于下轨且RSI超卖",
-                "target_price": float(current['ma']),  # 目标价格回归到移动平均线
-                "price": float(current['close'])
+                "reason": f"价格低于下轨({lower_band:.2f})且RSI超卖({rsi:.1f})",
+                "target_price": float(ma) if not pd.isna(ma) else float(close),
+                "price": float(close)
             }
 
-        # 检查卖出信号：价格高于上轨且RSI > 70（超买）
-        elif (current['close'] > current['upper_band'] and
-              current['rsi'] > 70):
+        # 卖出信号：价格高于上轨且RSI超买
+        elif close > upper_band and rsi > self.rsi_overbought:
             return {
                 "action": "sell",
-                "reason": "价格高于上轨且RSI超买",
-                "target_price": float(current['ma']),  # 目标价格回归到移动平均线
-                "price": float(current['close'])
+                "reason": f"价格高于上轨({upper_band:.2f})且RSI超买({rsi:.1f})",
+                "target_price": float(ma) if not pd.isna(ma) else float(close),
+                "price": float(close)
             }
 
         return {"action": "hold", "reason": "无明确信号"}
