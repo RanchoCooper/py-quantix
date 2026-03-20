@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 市场分析器运行器
-用于 analyser 模式：获取K线数据 → 调用大模型分析 → 发送到消息渠道
+用于 analyzer 模式：获取K线数据 → 调用大模型分析 → 发送到消息渠道
 """
 
 import time
@@ -275,7 +275,7 @@ class MarketAnalyzerRunner:
 
 
 # 便捷函数
-def run_analyser(config_path: str = "config/config.yaml"):
+def run_analyzer(config_path: str = "config/config.yaml"):
     """运行分析器的便捷函数"""
     from utils.config_manager import ConfigManager
 
@@ -288,4 +288,4 @@ def run_analyser(config_path: str = "config/config.yaml"):
 
 
 if __name__ == "__main__":
-    run_analyser()
+    run_analyzer()

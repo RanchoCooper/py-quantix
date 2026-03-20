@@ -1,4 +1,4 @@
-# 运行模式: monitor (监控交易) / analyser (市场分析)
+# 运行模式: monitor (监控交易) / analyzer (市场分析)
 run_mode: monitor
 
 # 币安API配置

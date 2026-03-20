@@ -35,7 +35,7 @@ def create_engine(config_path: str = "config/config.yaml", run_mode: str = None)
         actual_mode = run_mode if run_mode else config.get('run_mode', 'monitor')
         logger.info(f"检测到运行模式: {actual_mode}")
 
-        if actual_mode == 'analyser':
+        if actual_mode == 'analyzer':
             # 分析模式
             config['run_mode'] = actual_mode
             return MarketAnalyzerRunner(config)

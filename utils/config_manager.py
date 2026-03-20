@@ -15,7 +15,7 @@ class ConfigManager:
     # 支持的策略列表
     SUPPORTED_STRATEGIES = ['trend_following', 'mean_reversion', 'turtle_trading']
     # 支持的运行模式
-    SUPPORTED_RUN_MODES = ['monitor', 'analyser']
+    SUPPORTED_RUN_MODES = ['monitor', 'analyzer']
 
     @staticmethod
     def load_config(config_path: str, use_env: bool = True) -> Dict[str, Any]:
@@ -82,10 +82,10 @@ class ConfigManager:
                 return False
             logger.info(f"运行模式: {run_mode}")
 
-            # 检查必需的顶级字段（analyser 模式只需要 notifications）
+            # 检查必需的顶级字段（analyzer 模式只需要 notifications）
             if run_mode == 'monitor':
                 required_fields = ['binance', 'trading', 'strategies', 'notifications']
-            else:  # analyser 模式
+            else:  # analyzer 模式
                 required_fields = ['notifications', 'llm', 'market_data']
 
             for field in required_fields:

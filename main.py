@@ -37,8 +37,8 @@ def main():
     parser.add_argument(
         "--mode",
         default="",
-        choices=["auto", "monitor", "analyser"],
-        help="运行模式：auto 或 monitor 或 analyser（留空从配置读取）"
+        choices=["auto", "monitor", "analyzer"],
+        help="运行模式：auto 或 monitor 或 analyzer（留空从配置读取）"
     )
     parser.add_argument(
         "--once",
@@ -88,7 +88,7 @@ def main():
 
         if engine_type == 'MarketAnalyzerRunner':
             # 分析器模式
-            logger.info("运行模式: analyser (市场分析)")
+            logger.info("运行模式: analyzer (市场分析)")
             if args.once:
                 engine.run(send_notification=True)
             else:
