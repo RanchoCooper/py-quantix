@@ -11,10 +11,11 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 from core.analyzer import MarketAnalyzer
-from core.binance_client import BinanceMarketData
+from data.fetchers.market_fetcher import ExchangeClient
 from notifications.dingtalk import DingTalkNotifier
 from notifications.feishu import FeishuNotifier
 from utils.data_formatter import DataFormatter
+from utils.symbol_parser import get_symbol_list
 
 
 class MarketAnalyzerRunner:
@@ -39,12 +40,12 @@ class MarketAnalyzerRunner:
 
         # 初始化K线数据获取器
         llm_config = config.get('llm', {})
-        # 优先从 binance 配置读取代理，其次从 llm 配置读取（向后兼容）
         binance_config = config.get('binance', {})
-        proxy = binance_config.get('proxy') or llm_config.get('proxy', {})
-        self.market_client = BinanceMarketData(
-            proxy_http=proxy.get('http'),
-            proxy_https=proxy.get('https')
+
+        # 使用统一客户端
+        self.market_client = ExchangeClient(
+            exchange_id="binance",
+            testnet=binance_config.get('testnet', True)
         )
 
         # 初始化格式化器
@@ -71,14 +72,9 @@ class MarketAnalyzerRunner:
         # 通知器
         self.notifiers = self._init_notifiers()
 
-        # 兼容列表和字典格式
-        symbols = trading_config.get('symbols', [])
-        if isinstance(symbols, list):
-            self.symbols = [s.get('symbol') if isinstance(s, dict) else s for s in symbols]
-        elif isinstance(symbols, dict):
-            self.symbols = list(symbols.keys())
-        else:
-            self.symbols = ['BTCUSDT']
+        # 使用统一的符号解析函数
+        symbols = trading_config.get('symbols', ['BTCUSDT'])
+        self.symbols = get_symbol_list(symbols)
 
         logger.info(f"市场分析器初始化完成，分析交易对: {self.symbols}")
 
@@ -132,7 +128,7 @@ class MarketAnalyzerRunner:
 
         # 步骤1: 获取K线数据
         logger.info("步骤1: 获取K线数据...")
-        klines_data = self.market_client.get_multiple_symbols(
+        klines_data = self.market_client.fetch_klines(
             self.symbols, self.interval, self.limit
         )
 
@@ -208,15 +204,15 @@ class MarketAnalyzerRunner:
         # 按配置的输出方式发送
         for output in self.signal_output:
             if output == 'console':
-                print("\n" + "=" * 50)
-                print("分析报告汇总")
-                print("=" * 50)
-                print(summary)
+                logger.info("=" * 50)
+                logger.info("分析报告汇总")
+                logger.info("=" * 50)
+                logger.info(summary)
                 for symbol, result in analysis_results.items():
                     if result:
-                        print(f"\n--- {symbol} 分析结果 ---")
-                        print(result)
-                print("=" * 50)
+                        logger.info(f"--- {symbol} 分析结果 ---")
+                        logger.info(result)
+                logger.info("=" * 50)
 
             elif output == 'dingtalk' and 'dingtalk' in self.notifiers:
                 self.notifiers['dingtalk'].send_text(summary)

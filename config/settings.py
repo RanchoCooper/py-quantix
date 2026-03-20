@@ -99,6 +99,22 @@ class DataConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DATA_")
 
 
+class NetworkConfig(BaseSettings):
+    """网络请求配置"""
+    # API 重试配置
+    max_retries: int = 3
+    retry_delay: float = 1.0  # 初始重试延迟（秒）
+    backoff_factor: float = 2.0  # 退避因子
+
+    # 请求间隔
+    request_delay: float = 0.2  # 请求之间的延迟（秒）
+
+    # 超时配置
+    timeout: int = 30  # 请求超时（秒）
+
+    model_config = SettingsConfigDict(env_prefix="NETWORK_")
+
+
 class BacktestConfig(BaseSettings):
     """回测配置"""
     # 回测时间范围
@@ -219,6 +235,9 @@ class Settings(BaseSettings):
     # 策略
     strategies: StrategyConfig = Field(default_factory=StrategyConfig)
 
+    # 网络配置
+    network: NetworkConfig = Field(default_factory=NetworkConfig)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -241,13 +260,13 @@ class Settings(BaseSettings):
         return cls(**config_data)
 
 
-# 全局配置实例
-settings: Optional[Settings] = None
+# 模块级缓存（用于向后兼容）
+_settings_cache: Dict[str, Settings] = {}
 
 
 def get_settings(config_path: Optional[str] = None) -> Settings:
     """
-    获取配置实例
+    获取配置实例（带缓存）
 
     Args:
         config_path: 配置文件路径（YAML格式）
@@ -255,26 +274,37 @@ def get_settings(config_path: Optional[str] = None) -> Settings:
     Returns:
         Settings 实例
     """
-    global settings
+    cache_key = config_path or "__default__"
 
-    if settings is not None:
-        return settings
+    if cache_key in _settings_cache:
+        return _settings_cache[cache_key]
 
     if config_path and os.path.exists(config_path):
         settings = Settings.from_yaml(config_path)
     else:
         settings = Settings()
 
+    _settings_cache[cache_key] = settings
     return settings
 
 
 def reload_settings(config_path: Optional[str] = None) -> Settings:
-    """重新加载配置"""
-    global settings
+    """重新加载配置（清除缓存）"""
+    cache_key = config_path or "__default__"
 
     if config_path and os.path.exists(config_path):
         settings = Settings.from_yaml(config_path)
     else:
         settings = Settings()
 
+    _settings_cache[cache_key] = settings
     return settings
+
+
+def clear_settings_cache() -> None:
+    """清除配置缓存"""
+    _settings_cache.clear()
+
+
+# 向后兼容别名
+settings: Optional[Settings] = None

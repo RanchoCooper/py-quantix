@@ -1,15 +1,20 @@
-from typing import Any, Dict
+"""
+回测器模块
+支持从交易所获取指定时间范围的历史数据进行策略回测
+"""
+import asyncio
+from typing import Any, Dict, Optional
 
 import pandas as pd
 from loguru import logger
 
-from core.binance_client import BinanceFuturesClient
+from data.fetchers.market_fetcher import ExchangeClient
 from utils.config_manager import ConfigManager
 
 
 class Backtester:
     """
-    回测器类，支持从币安获取指定时间范围的历史数据进行策略回测
+    回测器类，支持从交易所获取指定时间范围的历史数据进行策略回测
     """
 
     def __init__(self, config_path: str = "config/config.yaml"):
@@ -17,72 +22,78 @@ class Backtester:
         初始化回测器
 
         Args:
-            config_path (str): 配置文件路径
+            config_path: 配置文件路径
         """
-        # 使用 ConfigManager 加载配置（支持环境变量覆盖）
+        # 使用 ConfigManager 加载配置
         self.config = ConfigManager.load_config(config_path, use_env=True)
 
-        # 初始化币安客户端
-        binance_config = self.config['binance']
-        proxy = binance_config.get('proxy', {})
-        self.client = BinanceFuturesClient(
-            api_key=binance_config['api_key'],
-            api_secret=binance_config['api_secret'],
-            testnet=binance_config['testnet'],
-            proxy_http=proxy.get('http'),
-            proxy_https=proxy.get('https')
+        # 初始化交易所客户端
+        binance_config = self.config.get('binance', {})
+        self.client = ExchangeClient(
+            exchange_id="binance",
+            testnet=binance_config.get('testnet', True)
         )
 
         logger.info("回测器初始化完成")
 
-    def get_historical_data(self, symbol: str, interval: str, lookback_period: str) -> pd.DataFrame:
+    def get_historical_data(
+        self,
+        symbol: str,
+        timeframe: Optional[str] = None,
+        lookback_period: str = "1d"
+    ) -> pd.DataFrame:
         """
-        从币安获取指定时间范围的历史K线数据
+        从交易所获取指定时间范围的历史K线数据
 
         Args:
-            symbol (str): 交易对符号 (例如: 'BTCUSDT')
-            interval (str): K线间隔 ('1m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M')
-            lookback_period (str): 回看周期 ('1h', '1d', '1w', '1mo')
+            symbol: 交易对符号 (例如: 'BTCUSDT')
+            timeframe: K线间隔 ('1m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M')
+            lookback_period: 回看周期 ('1h', '1d', '1w', '1mo')
 
         Returns:
-            pd.DataFrame: 包含历史K线数据的DataFrame
+            包含历史K线数据的DataFrame
         """
-        # 根据回看周期确定limit参数，增加数据量以满足策略计算需求
-        limit_map = {
-            '1h': 240,   # 4小时 = 240根1分钟K线 (用于1小时回测)
-            '1d': 168,   # 7天 = 168根1小时K线 (用于1天回测)
-            '1w': 28,    # 4周 = 28根1天K线 (用于1周回测)
-            '1mo': 365   # 1年 = 365根1天K线 (用于1月回测)
+        # 根据回看周期确定 limit 参数
+        limit_map: Dict[str, int] = {
+            '1h': 240,
+            '1d': 168,
+            '1w': 28,
+            '1mo': 365
         }
 
-        # 根据回看周期确定interval参数
-        interval_map = {
-            '1h': '1m',   # 1小时回测使用1分钟K线
-            '1d': '1h',   # 1天回测使用1小时K线
-            '1w': '1d',   # 1周回测使用1天K线
-            '1mo': '1d'   # 1月回测使用1天K线
+        # 根据回看周期确定 timeframe 参数
+        interval_map: Dict[str, str] = {
+            '1h': '1m',
+            '1d': '1h',
+            '1w': '1d',
+            '1mo': '1d'
         }
 
-        # 如果用户指定了interval，则使用用户指定的
-        if interval is None:
-            interval = interval_map.get(lookback_period, '1h')
+        # 如果用户指定了 timeframe，则使用用户指定的
+        if timeframe is None:
+            timeframe = interval_map.get(lookback_period, '1h')
 
         limit = limit_map.get(lookback_period, 100)
 
         try:
-            # 获取K线数据
-            klines = self.client.get_klines(
-                symbol=symbol,
-                interval=interval,
-                limit=limit
+            # 异步获取K线数据
+            klines: list = asyncio.run(
+                self.client.fetch_ohlcv(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    limit=limit
+                )
             )
 
             # 转换为DataFrame
-            df = pd.DataFrame(klines, columns=[
-                'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                'close_time', 'quote_asset_volume', 'number_of_trades',
-                'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
-            ])
+            df = pd.DataFrame(
+                klines,
+                columns=[
+                    'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                    'close_time', 'quote_asset_volume', 'number_of_trades',
+                    'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+                ]
+            )
 
             # 转换时间戳为datetime格式
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -100,21 +111,26 @@ class Backtester:
             logger.error(f"获取历史数据失败: {e}")
             raise
 
-    def backtest_strategy(self, strategy, data: pd.DataFrame, initial_capital: float = 10000.0) -> Dict[str, Any]:
+    def backtest_strategy(
+        self,
+        strategy: Any,
+        data: pd.DataFrame,
+        initial_capital: float = 10000.0
+    ) -> Dict[str, Any]:
         """
         对策略进行回测
 
         Args:
             strategy: 策略实例
-            data (pd.DataFrame): 历史K线数据
-            initial_capital (float): 初始资金
+            data: 历史K线数据
+            initial_capital: 初始资金
 
         Returns:
-            Dict[str, Any]: 回测结果
+            回测结果字典
         """
         capital = initial_capital
-        position = 0
-        trades = []
+        position = 0.0
+        trades: list = []
 
         try:
             # 计算技术指标
@@ -139,8 +155,7 @@ class Backtester:
                         'position': position
                     })
                 elif signal['action'] == "sell" and position >= 0:
-                    # 卖出信号 - 做空（如果支持）
-                    # 为简单起见，我们只平掉多头仓位
+                    # 卖出信号 - 平掉多头仓位
                     if position > 0:
                         row = data_with_indicators.iloc[i]
                         capital = position * row['close']
@@ -158,7 +173,7 @@ class Backtester:
             else:
                 final_value = capital
 
-            result = {
+            result: Dict[str, Any] = {
                 'initial_capital': initial_capital,
                 'final_value': final_value,
                 'return_pct': ((final_value - initial_capital) / initial_capital) * 100,
@@ -173,25 +188,31 @@ class Backtester:
             logger.error(f"回测过程中出错: {e}")
             raise
 
-    def run_backtest(self, symbol: str, strategy, lookback_period: str = '1d',
-                     interval: str = None, initial_capital: float = 10000.0) -> Dict[str, Any]:
+    def run_backtest(
+        self,
+        symbol: str,
+        strategy: Any,
+        lookback_period: str = '1d',
+        timeframe: Optional[str] = None,
+        initial_capital: float = 10000.0
+    ) -> Dict[str, Any]:
         """
         运行完整的回测流程
 
         Args:
-            symbol (str): 交易对符号
+            symbol: 交易对符号
             strategy: 策略实例
-            lookback_period (str): 回看周期 ('1h', '1d', '1w', '1mo')
-            interval (str): K线间隔，如果为None则自动选择
-            initial_capital (float): 初始资金
+            lookback_period: 回看周期 ('1h', '1d', '1w', '1mo')
+            timeframe: K线间隔，如果为None则自动选择
+            initial_capital: 初始资金
 
         Returns:
-            Dict[str, Any]: 回测结果
+            回测结果字典
         """
         logger.info(f"开始对 {symbol} 进行 {lookback_period} 回测")
 
         # 获取历史数据
-        data = self.get_historical_data(symbol, interval, lookback_period)
+        data = self.get_historical_data(symbol, timeframe, lookback_period)
 
         # 运行回测
         result = self.backtest_strategy(strategy, data, initial_capital)

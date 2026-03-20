@@ -48,7 +48,6 @@ class FeishuNotifier:
             if payload.get("msg_type") == "interactive":
                 payload["card"] = message.get("card", {})
 
-            response = requests.post(self.webhook_url, json=payload)
             # 发送POST请求
             response = requests.post(
                 self.webhook_url,

@@ -5,6 +5,8 @@ from typing import Any, Dict
 import yaml
 from loguru import logger
 
+from utils.symbol_parser import parse_symbol_config, get_symbol_list
+
 
 class ConfigManager:
     """
@@ -111,14 +113,12 @@ class ConfigManager:
                 logger.error("无效的交易配置: 缺少 symbols 字段")
                 return False
 
-            # 支持列表和字典两种格式
+            # 使用统一的符号配置解析函数
             symbols = trading_config['symbols']
-            if isinstance(symbols, list):
-                symbol_list = symbols
-            elif isinstance(symbols, dict):
-                symbol_list = [{'symbol': k, **v} for k, v in symbols.items()]
-            else:
-                logger.error("无效的交易配置: symbols 必须是列表或字典")
+            symbol_list = parse_symbol_config(symbols)
+
+            if not symbol_list:
+                logger.error("无效的交易配置: symbols 解析失败")
                 return False
 
             # 验证每个交易对配置
