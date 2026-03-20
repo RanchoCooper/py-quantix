@@ -11,10 +11,25 @@ from datetime import datetime
 class DataFormatter:
     """K线数据格式化器"""
 
+    def _fmt_indicator(self, value: Any, fmt: str = '.4f') -> str:
+        """
+        格式化技术指标值
+
+        Args:
+            value: 指标值
+            fmt: 格式字符串
+
+        Returns:
+            格式化后的字符串
+        """
+        if value is None or (isinstance(value, float) and value == 0):
+            return 'N/A'
+        return f"{value:{fmt}}" if isinstance(value, (int, float)) else str(value)
+
     def format_for_analysis(
         self,
         symbol: str,
-        klines: List[Dict[str, Any]],
+        klines: List,
         interval: str
     ) -> str:
         """
@@ -22,7 +37,9 @@ class DataFormatter:
 
         Args:
             symbol: 交易对，如 BTCUSDT
-            klines: K线数据列表
+            klines: K线数据列表，支持两种格式：
+                - 字典格式: [{open_time, open, high, low, close, volume}, ...]
+                - 列表格式: [[timestamp, open, high, low, close, volume], ...]
             interval: K线周期
 
         Returns:
@@ -31,12 +48,15 @@ class DataFormatter:
         if not klines:
             return f"{symbol}: 无数据"
 
+        # 统一转换为字典格式
+        normalized_klines = self._normalize_klines(klines)
+
         # 基础信息
-        latest = klines[-1]
-        prev = klines[-2] if len(klines) > 1 else latest
+        latest = normalized_klines[-1]
+        prev = normalized_klines[-2] if len(normalized_klines) > 1 else latest
 
         # 计算技术指标
-        indicators = self._calculate_indicators(klines)
+        indicators = self._calculate_indicators(normalized_klines)
 
         # 构建分析报告
         report = f"""## {symbol} 行情数据 ({interval})
@@ -54,11 +74,11 @@ class DataFormatter:
 - 涨跌额: {latest['close'] - prev['close']:.4f}
 
 ### 技术指标
-- MA5: {indicators.get('ma5', 'N/A'):.4f}
-- MA10: {indicators.get('ma10', 'N/A'):.4f}
-- MA20: {indicators.get('ma20', 'N/A'):.4f}
-- 成交量变化: {indicators.get('volume_change', 'N/A'):.2f}%
-- 波动率: {indicators.get('volatility', 'N/A'):.2f}%
+- MA5: {self._fmt_indicator(indicators.get('ma5'))}
+- MA10: {self._fmt_indicator(indicators.get('ma10'))}
+- MA20: {self._fmt_indicator(indicators.get('ma20'))}
+- 成交量变化: {self._fmt_indicator(indicators.get('volume_change'), '.2f')}%
+- 波动率: {self._fmt_indicator(indicators.get('volatility'), '.2f')}%
 
 ### 最近20根K线数据
 ```
@@ -66,7 +86,7 @@ class DataFormatter:
 """
 
         # 添加最近20根K线
-        recent_klines = klines[-20:] if len(klines) >= 20 else klines
+        recent_klines = normalized_klines[-20:] if len(normalized_klines) >= 20 else normalized_klines
         for k in recent_klines:
             report += f"{self._format_time(k['open_time']):12s} {k['open']:8.4f} {k['high']:8.4f} {k['low']:8.4f} {k['close']:8.4f} {k['volume']:12.4f}\n"
 
@@ -74,8 +94,41 @@ class DataFormatter:
 
         return report
 
+    def _normalize_klines(self, klines: List) -> List[Dict[str, Any]]:
+        """
+        统一K线数据格式为字典列表
+
+        Args:
+            klines: 原始K线数据
+
+        Returns:
+            字典格式的K线列表
+        """
+        if not klines:
+            return []
+
+        # 检查第一个元素是否为字典
+        first = klines[0]
+        if isinstance(first, dict):
+            return klines  # 已经是字典格式
+
+        # 列表格式转换为字典格式
+        # ccxt 格式: [timestamp, open, high, low, close, volume, ...]
+        normalized = []
+        for k in klines:
+            normalized.append({
+                'open_time': k[0],
+                'open': float(k[1]),
+                'high': float(k[2]),
+                'low': float(k[3]),
+                'close': float(k[4]),
+                'volume': float(k[5]),
+            })
+
+        return normalized
+
     def _calculate_indicators(self, klines: List[Dict[str, Any]]) -> Dict[str, float]:
-        """计算简单技术指标"""
+        """计算简单技术指标（已规范化为字典格式）"""
         if len(klines) < 5:
             return {}
 

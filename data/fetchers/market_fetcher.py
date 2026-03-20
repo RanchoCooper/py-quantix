@@ -1,6 +1,6 @@
 """
 市场数据获取与交易模块
-基于 ccxt 统一实现，支持多交易所
+支持多种 API 客户端：ccxt (统一交易所 API) 和 Binance 官方 API
 """
 import asyncio
 from datetime import datetime, timezone
@@ -11,12 +11,28 @@ import ccxt
 from loguru import logger
 from config.settings import get_settings
 
+# 延迟导入以避免循环依赖
+_binance_client = None
+
+
+def _get_binance_client():
+    """延迟导入 Binance 官方客户端"""
+    global _binance_client
+    if _binance_client is None:
+        from data.fetchers.binance_client import BinanceClient
+        _binance_client = BinanceClient
+    return _binance_client
+
 
 class ExchangeClient:
     """
     统一的交易所客户端，封装市场数据获取和交易功能
 
-    基于 ccxt 实现，支持：
+    支持两种实现方式：
+    - ccxt: 统一交易所 API，支持多交易所
+    - binance: Binance 官方 API (python-binance)
+
+    特性：
     - 市场数据获取（K线、行情、订单簿等）
     - 账户操作（余额、持仓）
     - 交易操作（下单、杠杆设置）
@@ -26,7 +42,7 @@ class ExchangeClient:
         self,
         exchange_id: str = "binance",
         testnet: bool = True,
-        config_path: Optional[str] = None,
+        config_path: Optional[str] = "config/config.yaml",
     ):
         """
         初始化交易所客户端
@@ -34,12 +50,19 @@ class ExchangeClient:
         Args:
             exchange_id: 交易所ID
             testnet: 是否使用测试网络
-            config_path: 配置文件路径
+            config_path: 配置文件路径（默认为 config/config.yaml）
         """
         self.settings = get_settings(config_path)
         self.exchange_id = exchange_id
         self.testnet = testnet
+
+        # 根据配置选择 API 客户端
+        self.api_client_type = self.settings.exchange.api_client
+
+        # ccxt 实例
         self.exchange: Optional[ccxt.Exchange] = None
+        # Binance 官方客户端实例
+        self._binance_client: Any = None
 
         # 初始化交易所实例
         self._init_exchange()
@@ -48,6 +71,19 @@ class ExchangeClient:
         """初始化交易所实例"""
         exchange_config = self.settings.exchange
 
+        # 根据配置选择 API 客户端类型
+        if exchange_config.api_client == "binance" and self.exchange_id == "binance":
+            # 使用 Binance 官方客户端
+            BinanceClientClass = _get_binance_client()
+            self._binance_client = BinanceClientClass(
+                exchange_id=self.exchange_id,
+                testnet=self.testnet,
+                config_path=None,  # 使用已加载的 settings
+            )
+            logger.info(f"使用 Binance 官方 API 客户端 (testnet: {self.testnet})")
+            return
+
+        # 默认使用 ccxt 客户端
         # 创建交易所实例
         exchange_class: type[ccxt.Exchange] = getattr(ccxt, self.exchange_id)
 
@@ -98,7 +134,7 @@ class ExchangeClient:
         if exchange_config.contract_type == "linear":
             self.exchange.options["defaultSettleCode"] = "USDT"
 
-        logger.info(f"Initialized exchange: {self.exchange_id}, testnet: {self.testnet}")
+        logger.info(f"Initialized exchange: {self.exchange_id}, testnet: {self.testnet}, client: ccxt")
 
     # ==================== 市场数据获取 ====================
 
@@ -121,6 +157,11 @@ class ExchangeClient:
         Returns:
             K线数据列表 [[timestamp, open, high, low, close, volume], ...]
         """
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.fetch_ohlcv(symbol, timeframe, limit, since)
+
+        # 使用 ccxt 客户端
         try:
             ohlcv = await asyncio.to_thread(
                 self.exchange.fetch_ohlcv,
@@ -138,6 +179,10 @@ class ExchangeClient:
 
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
         """获取当前行情"""
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.fetch_ticker(symbol)
+
         try:
             ticker = await asyncio.to_thread(
                 self.exchange.fetch_ticker,
@@ -153,6 +198,10 @@ class ExchangeClient:
         symbols: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """批量获取行情"""
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.fetch_tickers(symbols)
+
         try:
             tickers = await asyncio.to_thread(
                 self.exchange.fetch_tickers,
@@ -180,6 +229,11 @@ class ExchangeClient:
         Returns:
             {symbol: klines} 字典
         """
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.get_multiple_symbols(symbols, timeframe, limit)
+
+        # 使用 ccxt 客户端
         import time
 
         results: Dict[str, List[List]] = {}
@@ -215,6 +269,11 @@ class ExchangeClient:
         Returns:
             {symbol: klines} 字典
         """
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return self._binance_client.fetch_klines(symbols, timeframe, limit)
+
+        # 使用 ccxt 客户端
         import time
 
         results: Dict[str, List[List]] = {}
@@ -239,6 +298,10 @@ class ExchangeClient:
         limit: int = 20
     ) -> Dict[str, Any]:
         """获取订单簿"""
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.fetch_order_book(symbol, limit)
+
         try:
             order_book = await asyncio.to_thread(
                 self.exchange.fetch_order_book,
@@ -252,6 +315,10 @@ class ExchangeClient:
 
     async def fetch_mark_price(self, symbol: str) -> Optional[float]:
         """获取标记价格 (合约)"""
+        # Binance 官方客户端不支持此方法
+        if self._binance_client:
+            return None
+
         try:
             if hasattr(self.exchange, "fetch_mark_price"):
                 mark_price = await asyncio.to_thread(
@@ -268,6 +335,10 @@ class ExchangeClient:
 
     async def fetch_balance(self) -> Dict[str, Any]:
         """获取账户余额"""
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.fetch_balance()
+
         try:
             balance = await asyncio.to_thread(
                 self.exchange.fetch_balance
@@ -279,6 +350,10 @@ class ExchangeClient:
 
     async def fetch_position(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取持仓信息 (合约)"""
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.fetch_position(symbol)
+
         try:
             if hasattr(self.exchange, "fetch_position"):
                 position = await asyncio.to_thread(
@@ -293,6 +368,10 @@ class ExchangeClient:
 
     async def fetch_positions(self) -> List[Dict[str, Any]]:
         """获取所有持仓 (合约)"""
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.fetch_positions()
+
         try:
             if hasattr(self.exchange, "fetch_positions"):
                 positions = await asyncio.to_thread(
@@ -306,6 +385,10 @@ class ExchangeClient:
 
     async def fetch_funding_rate(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取资金费率 (合约)"""
+        # Binance 官方客户端不支持此方法
+        if self._binance_client:
+            return None
+
         try:
             if hasattr(self.exchange, "fetch_funding_rate"):
                 funding_rate = await asyncio.to_thread(
@@ -345,6 +428,12 @@ class ExchangeClient:
         Returns:
             订单信息
         """
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.create_order(
+                symbol, side, order_type, quantity, price, stop_price, params
+            )
+
         try:
             order_params = params or {}
 
@@ -383,6 +472,10 @@ class ExchangeClient:
         Returns:
             设置结果
         """
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return await self._binance_client.set_leverage(symbol, leverage, params)
+
         try:
             result = await asyncio.to_thread(
                 self.exchange.set_leverage,
@@ -400,6 +493,10 @@ class ExchangeClient:
 
     def get_server_time(self) -> int:
         """获取服务器时间"""
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return self._binance_client.get_server_time()
+
         try:
             return self.exchange.fetch_time()
         except Exception as e:
@@ -408,6 +505,10 @@ class ExchangeClient:
 
     def get_markets(self) -> Dict[str, Any]:
         """获取市场信息"""
+        # 使用 Binance 官方客户端
+        if self._binance_client:
+            return self._binance_client.get_markets()
+
         try:
             return self.exchange.load_markets()
         except Exception as e:

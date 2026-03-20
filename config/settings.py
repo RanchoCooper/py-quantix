@@ -4,7 +4,7 @@
 """
 import os
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,6 +36,9 @@ class ExchangeConfig(BaseSettings):
     # 测试模式
     testnet: bool = True
 
+    # API 客户端类型: ccxt, binance (官方API)
+    api_client: str = "ccxt"
+
     # 代理配置
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
 
@@ -56,8 +59,10 @@ class SymbolConfig(BaseSettings):
 
 class TradingConfig(BaseSettings):
     """交易配置"""
-    # 交易标的 - 支持列表和字典两种格式
-    symbols: List[str] = ["BTCUSDT"]
+    # 交易标的 - 支持两种格式：
+    # 1. 简单列表: ["BTCUSDT", "BNBUSDT"]
+    # 2. 详细配置: [{symbol: "BTCUSDT", leverage: 10, ...}, ...]
+    symbols: List[Union[str, Dict[str, Any]]] = ["BTCUSDT"]
 
     # 仓位管理
     max_position_size: float = 0.1
@@ -146,7 +151,7 @@ class FeishuConfig(BaseSettings):
     webhook_url: str = ""
     secret: str = ""
 
-    model_config = SettingsConfigDict(env_prefix="FEISHU_")
+    model_config = SettingsConfigDict(env_prefix="FEISHU_", extra="ignore")
 
 
 class NotificationConfig(BaseSettings):
@@ -242,6 +247,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
+        extra="ignore",  # 允许 YAML 中的额外字段
     )
 
     @classmethod
