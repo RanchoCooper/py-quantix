@@ -2,10 +2,138 @@ import hashlib
 import hmac
 import time
 import urllib.parse
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 from loguru import logger
+
+
+# 重试配置
+MAX_RETRIES = 3
+RETRY_DELAY = 1  # 初始重试延迟（秒）
+BACKOFF_FACTOR = 2  # 退避因子
+
+
+class BinanceMarketData:
+    """
+    币安市场数据获取客户端（现货/合约通用）
+
+    用于获取K线数据，无需签名认证。
+    支持代理配置和多端点自动切换。
+    """
+
+    BASE_URLS = [
+        "https://api.binance.com/api/v3",       # 国际版
+    ]
+
+    def __init__(self, proxy_http: str = None, proxy_https: str = None):
+        """
+        初始化市场数据客户端
+
+        Args:
+            proxy_http: HTTP 代理地址
+            proxy_https: HTTPS 代理地址
+        """
+        self.session = requests.Session()
+        self.session.headers.update({"Content-Type": "application/json"})
+
+        # 配置代理
+        if proxy_http or proxy_https:
+            self.session.proxies = {
+                "http": proxy_http,
+                "https": proxy_https or proxy_http
+            }
+            logger.info(f"使用代理: HTTP={proxy_http}, HTTPS={proxy_https}")
+
+        self.base_url = None
+        self._find_working_endpoint()
+
+    def _find_working_endpoint(self):
+        """自动查找可用的API端点"""
+        for url in self.BASE_URLS:
+            try:
+                test_url = f"{url}/ping"
+                response = self.session.get(test_url, timeout=3)
+                if response.status_code == 200:
+                    self.base_url = url
+                    logger.info(f"使用币安API端点: {url}")
+                    return
+            except Exception as e:
+                logger.warning(f"API端点 {url} 不可用: {e}")
+        self.base_url = self.BASE_URLS[0]
+
+    def get_klines(
+        self,
+        symbol: str,
+        interval: str = "1h",
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        获取K线数据
+
+        Args:
+            symbol: 交易对，如 BTCUSDT
+            interval: K线周期，如 1m, 5m, 15m, 1h, 4h, 1d
+            limit: 获取数量，最大1000
+
+        Returns:
+            K线数据列表（字典格式）
+        """
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "limit": limit
+        }
+
+        try:
+            response = self.session.get(
+                f"{self.base_url}/klines",
+                params=params,
+                timeout=10
+            )
+            response.raise_for_status()
+            return self._format_klines(response.json())
+        except requests.exceptions.RequestException as e:
+            logger.error(f"获取 {symbol} K线数据失败: {e}")
+            return []
+
+    def _format_klines(self, raw_data: List) -> List[Dict[str, Any]]:
+        """格式化K线数据为字典列表"""
+        formatted = []
+        for kline in raw_data:
+            formatted.append({
+                "open_time": kline[0],
+                "open": float(kline[1]),
+                "high": float(kline[2]),
+                "low": float(kline[3]),
+                "close": float(kline[4]),
+                "volume": float(kline[5]),
+                "close_time": kline[6],
+                "quote_volume": float(kline[7]),
+                "trades": kline[8],
+                "taker_buy_base_volume": float(kline[9]),
+                "taker_buy_quote_volume": float(kline[10])
+            })
+        return formatted
+
+    def get_multiple_symbols(
+        self,
+        symbols: List[str],
+        interval: str = "1h",
+        limit: int = 100
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """批量获取多个交易对的K线数据"""
+        results = {}
+        for symbol in symbols:
+            logger.info(f"正在获取 {symbol} 数据...")
+            klines = self.get_klines(symbol, interval, limit)
+            if klines:
+                results[symbol] = klines
+            else:
+                logger.warning(f"获取 {symbol} 数据失败")
+            time.sleep(0.2)  # 避免请求过快
+        logger.info(f"成功获取 {len(results)}/{len(symbols)} 个交易对的数据")
+        return results
 
 
 class BinanceFuturesClient:
@@ -16,7 +144,8 @@ class BinanceFuturesClient:
     K线数据获取、订单下单等操作。支持实盘和测试网环境切换。
     """
 
-    def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
+    def __init__(self, api_key: str, api_secret: str, testnet: bool = True,
+                 proxy_http: str = None, proxy_https: str = None):
         """
         初始化币安合约客户端
 
@@ -24,6 +153,8 @@ class BinanceFuturesClient:
             api_key (str): 币安API密钥，用于身份验证
             api_secret (str): 币安API密钥，用于请求签名
             testnet (bool, optional): 是否使用测试网环境. 默认为 True.
+            proxy_http (str, optional): HTTP 代理地址
+            proxy_https (str, optional): HTTPS 代理地址
 
         Attributes:
             api_key (str): API密钥
@@ -50,6 +181,14 @@ class BinanceFuturesClient:
             "X-MBX-APIKEY": self.api_key
         })
 
+        # 配置代理
+        if proxy_http or proxy_https:
+            self.session.proxies = {
+                "http": proxy_http,
+                "https": proxy_https or proxy_http
+            }
+            logger.info(f"使用代理: HTTP={proxy_http}, HTTPS={proxy_https}")
+
         logger.info(f"币安合约客户端初始化完成. 测试网: {testnet}")
 
     def _generate_signature(self, params: Dict[str, Any]) -> str:
@@ -75,7 +214,7 @@ class BinanceFuturesClient:
 
     def _send_request(self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None, signed: bool = False) -> Dict[str, Any]:
         """
-        发送HTTP请求到币安API
+        发送HTTP请求到币安API（带重试机制）
 
         Args:
             method (str): HTTP方法 ('GET', 'POST', 'DELETE', 等)
@@ -104,13 +243,22 @@ class BinanceFuturesClient:
 
         url = f"{self.base_url}{endpoint}"
 
-        try:
-            response = self.session.request(method, url, params=params)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"API请求失败: {e}")
-            raise
+        last_exception = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.session.request(method, url, params=params)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                last_exception = e
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_DELAY * (BACKOFF_FACTOR ** attempt)
+                    logger.warning(f"API请求失败 (尝试 {attempt + 1}/{MAX_RETRIES}), {delay}秒后重试: {e}")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"API请求失败，已达到最大重试次数: {e}")
+
+        raise last_exception
 
     def get_account_info(self) -> Dict[str, Any]:
         """

@@ -1,12 +1,51 @@
 import importlib
 import json
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, Optional
 
+import pandas as pd
+import yaml
 from loguru import logger
 
+from core.analyzer_runner import MarketAnalyzerRunner
 from core.binance_client import BinanceFuturesClient
 from notifications.dingtalk import DingTalkNotifier
+from notifications.feishu import FeishuNotifier
+
+
+def create_engine(config_path: str = "config/config.yaml", run_mode: str = None) -> Optional[object]:
+    """
+    工厂函数：根据配置创建合适的引擎实例
+
+    Args:
+        config_path: 配置文件路径
+        run_mode: 运行模式，如果为 None 则从配置文件读取
+
+    Returns:
+        TradingEngine 或 MarketAnalyzerRunner 实例
+    """
+    try:
+        with open(config_path, 'r') as f:
+            if config_path.endswith('.yaml') or config_path.endswith('.yml'):
+                config = yaml.safe_load(f)
+            else:
+                config = json.load(f)
+
+        # 优先使用传入的 run_mode，否则从配置读取
+        actual_mode = run_mode if run_mode else config.get('run_mode', 'monitor')
+        logger.info(f"检测到运行模式: {actual_mode}")
+
+        if actual_mode == 'analyser':
+            # 分析模式
+            config['run_mode'] = actual_mode
+            return MarketAnalyzerRunner(config)
+        else:
+            # 监控/交易模式
+            return TradingEngine(config_path=config_path, mode='monitor')
+
+    except Exception as e:
+        logger.error(f"创建引擎失败: {e}")
+        return None
 
 
 class TradingEngine:
@@ -21,33 +60,37 @@ class TradingEngine:
     4. 为每个交易对初始化对应的策略
     5. 获取市场数据并评估策略
     6. 根据运行模式执行交易或仅监控
+    7. 根据配置选择信号输出方式（钉钉通知或命令行打印）
     """
 
-    def __init__(self, config_path: str = "config/config.json", mode: str = "auto"):
+    def __init__(self, config_path: str = "config/config.yaml", mode: str = "auto"):
         """
         初始化交易引擎
 
         Args:
-            config_path (str, optional): 配置文件路径. 默认为 "config/config.json".
+            config_path (str, optional): 配置文件路径. 默认为 "config/config.yaml".
+                支持JSON和YAML格式配置文件.
             mode (str, optional): 运行模式 ("auto" 或 "monitor"). 默认为 "auto".
 
         Attributes:
             config (Dict[str, Any]): 配置信息
             mode (str): 运行模式
             client (BinanceFuturesClient): 币安合约客户端实例
-            notifier (DingTalkNotifier): 钉钉通知器实例
+            notifiers (Dict[str, Any]): 通知器字典 {channel: notifier_instance}
             strategies (Dict[str, Any]): 交易对与策略实例的映射
             last_signals (Dict[str, Any]): 存储每个交易对的最后信号
             positions (Dict[str, Any]): 存储每个交易对的持仓信息
 
         Example:
-            >>> engine = TradingEngine(config_path="config/config.json", mode="auto")
+            >>> engine = TradingEngine(config_path="config/config.yaml", mode="auto")
             >>> logger.info("交易引擎初始化成功")
         """
+        # 加载并验证配置
+        # 支持JSON和YAML格式配置文件
         self.config = self._load_config(config_path)
         self.mode = mode  # 运行模式
         self.client = self._init_binance_client()
-        self.notifier = self._init_notifier()
+        self.notifiers = self._init_notifiers()
         # 为每个交易对初始化策略
         self.strategies = self._init_strategies()
         self.last_signals = {}  # 存储每个交易对的最后信号
@@ -57,7 +100,7 @@ class TradingEngine:
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """
-        从JSON文件加载配置
+        从文件加载配置，支持JSON和YAML格式
 
         Args:
             config_path (str): 配置文件路径
@@ -67,17 +110,22 @@ class TradingEngine:
 
         Raises:
             FileNotFoundError: 当配置文件不存在时抛出
-            json.JSONDecodeError: 当配置文件格式不正确时抛出
+            json.JSONDecodeError: 当JSON配置文件格式不正确时抛出
+            yaml.YAMLError: 当YAML配置文件格式不正确时抛出
 
         Example:
-            >>> config = self._load_config("config/config.json")
+            >>> config = self._load_config("config/config.yaml")
             >>> print(config['binance']['api_key'])
             your_api_key
         """
         try:
             with open(config_path, 'r') as f:
-                config = json.load(f)
-            logger.info(f"配置已从 {config_path} 加载")
+                if config_path.endswith('.yaml') or config_path.endswith('.yml'):
+                    config = yaml.safe_load(f)
+                    logger.info(f"YAML配置已从 {config_path} 加载")
+                else:
+                    config = json.load(f)
+                    logger.info(f"JSON配置已从 {config_path} 加载")
             return config
         except Exception as e:
             logger.error(f"加载配置失败: {e}")
@@ -95,42 +143,72 @@ class TradingEngine:
             >>> logger.info("币安客户端初始化成功")
         """
         binance_config = self.config['binance']
+        proxy = binance_config.get('proxy', {})
         client = BinanceFuturesClient(
             api_key=binance_config['api_key'],
             api_secret=binance_config['api_secret'],
-            testnet=binance_config['testnet']
+            testnet=binance_config['testnet'],
+            proxy_http=proxy.get('http'),
+            proxy_https=proxy.get('https')
         )
 
         # 为所有交易对设置杠杆
         trading_symbols = self.config['trading']['symbols']
-        for symbol, symbol_config in trading_symbols.items():
+        # 支持列表和字典两种格式
+        if isinstance(trading_symbols, list):
+            symbol_list = trading_symbols
+        else:
+            symbol_list = [{'symbol': k, **v} for k, v in trading_symbols.items()]
+
+        for item in symbol_list:
+            symbol = item.get('symbol')
             try:
                 client.set_leverage(
                     symbol=symbol,
-                    leverage=symbol_config['leverage']
+                    leverage=item['leverage']
                 )
-                logger.info(f"已为 {symbol} 设置杠杆 {symbol_config['leverage']}")
+                logger.info(f"已为 {symbol} 设置杠杆 {item['leverage']}")
             except Exception as e:
                 logger.warning(f"为 {symbol} 设置杠杆失败: {e}")
 
         return client
 
-    def _init_notifier(self) -> DingTalkNotifier:
+    def _init_notifiers(self) -> Dict[str, Any]:
         """
-        初始化钉钉通知器
+        初始化所有启用的通知器
 
         Returns:
-            DingTalkNotifier: DingTalkNotifier实例
+            Dict[str, Any]: 通知器字典 {channel: notifier_instance}
 
         Example:
-            >>> notifier = self._init_notifier()
-            >>> logger.info("钉钉通知器初始化成功")
+            >>> notifiers = self._init_notifiers()
+            >>> logger.info("通知器初始化成功")
         """
-        notify_config = self.config['notifications']['dingtalk']
-        return DingTalkNotifier(
-            webhook_url=notify_config['webhook_url'],
-            secret=notify_config.get('secret')
-        )
+        notifiers = {}
+        notifications_config = self.config.get('notifications', {})
+
+        # 钉钉通知器
+        if 'dingtalk' in notifications_config:
+            notify_config = notifications_config['dingtalk']
+            if notify_config.get('webhook_url'):
+                notifiers['dingtalk'] = DingTalkNotifier(
+                    webhook_url=notify_config['webhook_url'],
+                    secret=notify_config.get('secret')
+                )
+                logger.info("钉钉通知器已初始化")
+
+        # 飞书通知器
+        if 'feishu' in notifications_config:
+            notify_config = notifications_config['feishu']
+            if notify_config.get('webhook_url'):
+                notifiers['feishu'] = FeishuNotifier(
+                    webhook_url=notify_config['webhook_url'],
+                    template_id=notify_config.get('template_id'),
+                    template_version=notify_config.get('template_version')
+                )
+                logger.info("飞书通知器已初始化")
+
+        return notifiers
 
     def _init_strategies(self) -> Dict[str, Any]:
         """
@@ -147,18 +225,32 @@ class TradingEngine:
         strategies = {}
         trading_symbols = self.config['trading']['symbols']
 
-        for symbol, symbol_config in trading_symbols.items():
-            strategy_name = symbol_config['strategy']
+        # 支持列表和字典两种格式
+        if isinstance(trading_symbols, list):
+            symbol_list = trading_symbols
+        else:
+            symbol_list = [{'symbol': k, **v} for k, v in trading_symbols.items()]
+
+        for item in symbol_list:
+            symbol = item.get('symbol')
+            strategy_name = item['strategy']
             # 优先使用交易对特定的策略参数，否则使用全局策略配置
-            if 'strategy_params' in symbol_config:
-                strategy_config = symbol_config['strategy_params']
+            if 'strategy_params' in item:
+                strategy_config = item['strategy_params']
             else:
                 strategy_config = self.config['strategies'].get(strategy_name, {})
 
             # 动态导入并实例化策略
             try:
                 module = importlib.import_module(f"strategies.{strategy_name}")
-                strategy_class = getattr(module, f"{strategy_name.title().replace('_', '')}Strategy")
+                # 使用更准确的类名映射
+                class_name_map = {
+                    'trend_following': 'TrendFollowingStrategy',
+                    'mean_reversion': 'MeanReversionStrategy',
+                    'turtle_trading': 'TurtleTradingStrategy'
+                }
+                strategy_class_name = class_name_map.get(strategy_name, f"{strategy_name.title().replace('_', '')}Strategy")
+                strategy_class = getattr(module, strategy_class_name)
                 strategy = strategy_class(**strategy_config)
                 strategies[symbol] = strategy
                 logger.info(f"交易对 {symbol} 的策略 {strategy_name} 初始化完成")
@@ -196,9 +288,29 @@ class TradingEngine:
             logger.error(f"获取市场数据失败: {e}")
             raise
 
+    def _get_symbol_config(self, symbol: str) -> Dict[str, Any]:
+        """
+        获取指定交易对的配置
+
+        Args:
+            symbol: 交易对符号
+
+        Returns:
+            交易对配置字典
+        """
+        trading_symbols = self.config['trading']['symbols']
+        # 支持列表和字典两种格式
+        if isinstance(trading_symbols, list):
+            for item in trading_symbols:
+                if item.get('symbol') == symbol:
+                    return item
+            return {}
+        else:
+            return trading_symbols.get(symbol, {})
+
     def _execute_trade(self, symbol: str, signal: Dict[str, Any]) -> bool:
         """
-        根据信号执行交易
+        执行交易操作，根据配置选择信号输出方式
 
         Args:
             symbol (str): 交易对符号
@@ -206,6 +318,11 @@ class TradingEngine:
 
         Returns:
             bool: 表示执行是否成功的布尔值
+
+        Signal Output Options:
+            - 'console': 通过命令行日志打印交易信号
+            - 'dingtalk': 通过钉钉机器人发送交易通知
+            - 'feishu': 通过飞书机器人发送交易通知
 
         Example:
             >>> success = self._execute_trade("BTCUSDT", signal)
@@ -215,18 +332,38 @@ class TradingEngine:
         if signal['action'] == 'hold':
             return True
 
-        trading_symbols = self.config['trading']['symbols']
-        symbol_config = trading_symbols.get(symbol, {})
+        symbol_config = self._get_symbol_config(symbol)
         position_size = symbol_config.get('position_size', 0.001)
 
-        # 发送交易通知（无论哪种模式都会发送）
-        self.notifier.send_trade_notification(
-            symbol=symbol,
-            action=signal['action'],
-            price=signal.get('price', 0),
-            reason=signal.get('reason', ''),
-            position_size=position_size
-        )
+        # 获取信号输出方式配置，默认为命令行
+        # 优先从根级别读取，其次从 trading 配置读取（向后兼容）
+        signal_output = self.config.get('signal_output', self.config['trading'].get('signal_output', ['console']))
+        if isinstance(signal_output, str):
+            signal_output = [signal_output]
+
+        # 构建通知消息内容
+        message = f"[信号输出] 交易对: {symbol}, 操作: {signal['action']}, 价格: {signal.get('price', 0)}, 原因: {signal.get('reason', '')}, 头寸大小: {position_size}"
+
+        # 根据配置发送交易通知
+        for output in signal_output:
+            if output == 'console':
+                logger.info(message)
+            elif output == 'dingtalk' and 'dingtalk' in self.notifiers:
+                self.notifiers['dingtalk'].send_trade_notification(
+                    symbol=symbol,
+                    action=signal['action'],
+                    price=signal.get('price', 0),
+                    reason=signal.get('reason', ''),
+                    position_size=position_size
+                )
+            elif output == 'feishu' and 'feishu' in self.notifiers:
+                self.notifiers['feishu'].send_trade_notification(
+                    symbol=symbol,
+                    action=signal['action'],
+                    price=signal.get('price', 0),
+                    reason=signal.get('reason', ''),
+                    position_size=position_size
+                )
 
         # 根据运行模式决定是否真正下单
         if self.mode == "monitor":
@@ -258,7 +395,7 @@ class TradingEngine:
 
             except Exception as e:
                 logger.error(f"执行交易失败: {e}")
-                self.notifier.send_system_alert(
+                self._send_system_alert(
                     "交易执行失败",
                     f"错误: {str(e)}"
                 )
@@ -266,6 +403,20 @@ class TradingEngine:
         else:
             logger.warning(f"未知的运行模式: {self.mode}，默认不执行交易")
             return False
+
+    def _send_system_alert(self, title: str, message: str):
+        """
+        发送系统警报到所有已配置的通知器
+
+        Args:
+            title: 警报标题
+            message: 警报消息
+        """
+        for channel, notifier in self.notifiers.items():
+            try:
+                notifier.send_system_alert(title, message)
+            except Exception as e:
+                logger.error(f"发送 {channel} 系统警报失败: {e}")
 
     def evaluate_strategy(self, symbol: str) -> Dict[str, Any]:
         """
@@ -375,7 +526,7 @@ class TradingEngine:
 
         except Exception as e:
             logger.error(f"运行交易对 {symbol} 的交易循环失败: {e}")
-            self.notifier.send_system_alert(
+            self._send_system_alert(
                 "交易循环错误",
                 f"交易对 {symbol} 错误: {str(e)}"
             )
@@ -413,7 +564,7 @@ class TradingEngine:
 
             except Exception as e:
                 logger.error(f"运行交易对 {symbol} 的交易循环失败: {e}")
-                self.notifier.send_system_alert(
+                self._send_system_alert(
                     "交易循环错误",
                     f"交易对 {symbol} 错误: {str(e)}"
                 )
@@ -447,7 +598,7 @@ class TradingEngine:
                 break
             except Exception as e:
                 logger.error(f"持续运行期间出错: {e}")
-                self.notifier.send_system_alert(
+                self._send_system_alert(
                     "持续运行错误",
                     f"错误: {str(e)}"
                 )

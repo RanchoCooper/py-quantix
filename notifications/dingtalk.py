@@ -9,12 +9,13 @@ from typing import Any, Dict, Optional
 import requests
 from loguru import logger
 
-from utils.logger import setup_logger
-
 
 class DingTalkNotifier:
     """
     钉钉通知服务，用于发送警报和交易通知
+
+    当配置中 signal_output 设置为 'dingtalk' 时，交易信号将通过此服务发送到钉钉群聊。
+    支持文本消息、交易通知和系统警报三种消息类型。
     """
 
     def __init__(self, webhook_url: str, secret: Optional[str] = None):
@@ -118,7 +119,7 @@ class DingTalkNotifier:
         Returns:
             表示成功与否的布尔值
         """
-        content = f"🚨 交易警报 🚨\n"
+        content = "🚨 交易警报 🚨\n"
         content += f"交易对: {symbol}\n"
         content += f"操作: {action.upper()}\n"
         content += f"价格: {price}\n"
@@ -140,7 +141,7 @@ class DingTalkNotifier:
         Returns:
             表示成功与否的布尔值
         """
-        content = f"⚠️ 系统警报 ⚠️\n"
+        content = "⚠️ 系统警报 ⚠️\n"
         content += f"标题: {title}\n"
         content += f"消息: {message}\n"
         content += f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"

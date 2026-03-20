@@ -3,48 +3,39 @@ from typing import Any, Dict, List
 import pandas as pd
 from loguru import logger
 
+from strategies.base_strategy import BaseStrategy
 
-class TrendFollowingStrategy:
+
+class TrendFollowingStrategy(BaseStrategy):
     """
     基于移动平均线和动量的趋势跟踪策略
     """
 
-    def __init__(self, period: int = 14, multiplier: float = 2.0):
+    MIN_PERIOD = 25
+
+    def __init__(self, **kwargs):
         """
         初始化趋势跟踪策略
 
         Args:
-            period: 计算移动平均线的周期
-            multiplier: 止损和止盈水平的乘数
+            kwargs: 策略参数字典
+                - period (int, optional): 计算移动平均线的周期，默认为14
+                - multiplier (float, optional): 止损和止盈水平的乘数，默认为2.0
         """
-        self.period = period
-        self.multiplier = multiplier
-        logger.info(f"趋势跟踪策略初始化，周期={period}，乘数={multiplier}")
+        self.period = kwargs.get('period', 14)
+        self.multiplier = kwargs.get('multiplier', 2.0)
+        logger.info(f"趋势跟踪策略初始化，周期={self.period}，乘数={self.multiplier}")
 
-    def calculate_indicators(self, klines: List[List]) -> pd.DataFrame:
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         为趋势跟踪策略计算技术指标
 
         Args:
-            klines: 来自币安API的K线数据
+            df: 包含K线数据的DataFrame
 
         Returns:
             包含计算指标的DataFrame
         """
-        # 将klines转换为DataFrame
-        df = pd.DataFrame(klines, columns=[
-            'timestamp', 'open', 'high', 'low', 'close', 'volume',
-            'close_time', 'quote_asset_volume', 'number_of_trades',
-            'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
-        ])
-
-        # 转换为数值
-        df['open'] = pd.to_numeric(df['open'])
-        df['high'] = pd.to_numeric(df['high'])
-        df['low'] = pd.to_numeric(df['low'])
-        df['close'] = pd.to_numeric(df['close'])
-        df['volume'] = pd.to_numeric(df['volume'])
-
         # 计算移动平均线
         df['ma_short'] = df['close'].rolling(window=self.period//2).mean()
         df['ma_long'] = df['close'].rolling(window=self.period).mean()
@@ -106,34 +97,3 @@ class TrendFollowingStrategy:
             }
 
         return {"action": "hold", "reason": "无明确信号"}
-
-    def evaluate(self, klines: List[List]) -> Dict[str, Any]:
-        """
-        基于K线数据评估策略
-
-        Args:
-            klines: 来自币安API的K线数据
-
-        Returns:
-            包含信号的评估结果
-        """
-        try:
-            df = self.calculate_indicators(klines)
-            signal = self.generate_signals(df)
-            return signal
-        except Exception as e:
-            logger.error(f"评估趋势跟踪策略时出错: {e}")
-            return {"action": "hold", "reason": f"错误: {str(e)}"}
-
-
-# 示例用法
-if __name__ == "__main__":
-    # 示例K线数据（实际应用中来自币安API）
-    sample_klines = [
-        [1617590400000, "57648.57", "57715.00", "57560.00", "57663.21", "305.94734000", 1617590699999, "17644864.26770240", 1234, "153.23582000", "8827865.18270240", "0"],
-        # ... 更多K线数据
-    ]
-
-    strategy = TrendFollowingStrategy(period=14, multiplier=2.0)
-    result = strategy.evaluate(sample_klines)
-    print("策略结果:", result)
