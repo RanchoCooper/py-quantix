@@ -22,6 +22,7 @@
 
 ### 数据支持
 - **多交易所支持**：基于 ccxt 支持 Binance、OKX、Bybit 等
+- **API 客户端选择**：支持 ccxt（统一 API）或 Binance 官方 API（python-binance）
 - **K线数据**：支持多个交易对、多种时间周期
 - **实时行情**：ticker、order_book、funding_rate
 - **技术指标**：MA、ATR、布林带、RSI、EMA、SMA 等
@@ -58,10 +59,18 @@ signal_output:
   - console
   - feishu
 
-binance:
+exchange:
+  # API 客户端: ccxt (默认) 或 binance (官方API)
+  api_client: ccxt
+  # 交易所配置
   api_key: your_api_key
   api_secret: your_api_secret
   testnet: true
+  mode: futures  # spot, futures, swap
+  # 代理配置 (可选，国内访问币安需要代理)
+  proxy:
+    http: "http://127.0.0.1:8001"
+    https: "http://127.0.0.1:8001"
 
 trading:
   symbols:
@@ -81,7 +90,7 @@ notifications:
 llm:
   enabled: true
   api_key: your_minimax_api_key
-  model: "Claude Opus-4.6"
+  model: your_llm_model
 ```
 
 ### 3. 运行系统
@@ -133,7 +142,15 @@ Options:
 run_mode: monitor          # 运行模式
 signal_output: [console]   # 输出渠道
 
-binance:                   # 币安 API
+exchange:                  # 交易所配置
+  api_client: ccxt        # API 客户端: ccxt 或 binance
+  api_key: xxx            # API 密钥
+  api_secret: xxx          # API 私钥
+  testnet: true           # 是否使用测试网
+  mode: futures           # 交易模式: spot, futures, swap
+  proxy:                  # 代理配置 (可选)
+    http: "http://127.0.0.1:8001"
+    https: "http://127.0.0.1:8001"
 trading:                   # 交易配置
 notifications:              # 通知渠道
 llm:                       # LLM 分析配置
@@ -197,7 +214,18 @@ py-quantix/
 
 ## API 集成
 
-### 新版数据获取 (基于 ccxt)
+### 新版数据获取 (基于 ccxt 或 Binance 官方 API)
+
+系统支持两种 API 客户端：
+- **ccxt** (默认): 统一的交易所 API，支持多交易所
+- **binance**: Binance 官方 API (python-binance)，更适合 Binance 生态
+
+通过配置选择：
+
+```yaml
+exchange:
+  api_client: binance  # 或 ccxt
+```
 
 ```python
 import asyncio
@@ -205,8 +233,11 @@ from data.fetchers import MarketFetcher
 from data.storage import CandleStore
 
 async def main():
-    # 初始化数据获取器
+    # 初始化数据获取器（自动根据配置选择客户端）
     fetcher = MarketFetcher(exchange_id="binance", testnet=True)
+
+    # 查看当前使用的客户端类型
+    print(f"当前客户端: {fetcher.api_client_type}")
 
     # 获取 K 线数据
     candles = await fetcher.fetch_ohlcv("BTC/USDT:USDT", "1h", limit=100)
@@ -230,6 +261,27 @@ async def main():
     # 获取 DataFrame
     df = store.get_candles_dataframe("BTC/USDT:USDT", "1h")
     print(df.tail())
+
+asyncio.run(main())
+```
+
+### 直接使用 Binance 官方客户端
+
+```python
+from data.fetchers.binance_client import BinanceClient
+
+# 创建 Binance 官方客户端
+client = BinanceClient(testnet=True)
+
+# 获取 K 线数据
+klines = client.fetch_klines(["BTCUSDT"], "1h", 100)
+print(f"K线数据: {klines}")
+
+# 异步获取
+import asyncio
+async def main():
+    klines = await client.fetch_ohlcv("BTCUSDT", "1h", 100)
+    print(f"K线数据: {klines}")
 
 asyncio.run(main())
 ```

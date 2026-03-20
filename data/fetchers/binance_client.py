@@ -30,6 +30,7 @@ class BinanceClient:
         exchange_id: str = "binance",
         testnet: bool = True,
         config_path: Optional[str] = None,
+        settings: Optional[Any] = None,
     ):
         """
         初始化 Binance 客户端
@@ -38,8 +39,10 @@ class BinanceClient:
             exchange_id: 交易所ID（目前仅支持 binance）
             testnet: 是否使用测试网络
             config_path: 配置文件路径
+            settings: 已加载的 Settings 实例（可选）
         """
-        self.settings = get_settings(config_path)
+        # 使用传入的 settings 或重新加载
+        self.settings = settings if settings is not None else get_settings(config_path)
         self.exchange_id = exchange_id
         self.testnet = testnet
         # 延迟初始化 Client 对象
@@ -69,6 +72,18 @@ class BinanceClient:
         """创建 Binance Client 对象"""
         exchange_config = self.settings.exchange
 
+        # 准备 requests_params（代理配置）
+        requests_params = None
+        if self._proxy_config and (self._proxy_config.http or self._proxy_config.https):
+            proxy_url = self._proxy_config.https or self._proxy_config.http
+            requests_params = {
+                'proxies': {
+                    'http': self._proxy_config.http,
+                    'https': proxy_url,
+                }
+            }
+            logger.info(f"使用代理: {proxy_url}")
+
         # 测试网络配置
         if self.testnet:
             # Binance Testnet 使用不同的端点
@@ -77,7 +92,7 @@ class BinanceClient:
 
             # 注意：python-binance 官方 Testnet 已弃用
             # 使用主网但通过配置自定义 URL
-            client = Client(testnet_api_key, testnet_api_secret, testnet=True)
+            client = Client(testnet_api_key, testnet_api_secret, testnet=True, requests_params=requests_params)
             logger.warning(
                 "Binance Testnet 已迁移到新端点。"
                 "如需使用测试环境，请配置 TESTNET=true 使用主网数据或自行搭建本地测试网。"
@@ -87,16 +102,8 @@ class BinanceClient:
             client = Client(
                 exchange_config.api_key,
                 exchange_config.api_secret,
+                requests_params=requests_params,
             )
-
-        # 代理配置
-        if self._proxy_config and (self._proxy_config.http or self._proxy_config.https):
-            proxy_url = self._proxy_config.https or self._proxy_config.http
-            client.proxies = {
-                "http": self._proxy_config.http,
-                "https": proxy_url,
-            }
-            logger.info(f"使用代理: {proxy_url}")
 
         return client
 

@@ -75,10 +75,11 @@ class ExchangeClient:
         if exchange_config.api_client == "binance" and self.exchange_id == "binance":
             # 使用 Binance 官方客户端
             BinanceClientClass = _get_binance_client()
+            # 直接传递已加载的 settings，避免重新加载配置
             self._binance_client = BinanceClientClass(
                 exchange_id=self.exchange_id,
                 testnet=self.testnet,
-                config_path=None,  # 使用已加载的 settings
+                settings=self.settings,  # 传递已加载的 settings
             )
             logger.info(f"使用 Binance 官方 API 客户端 (testnet: {self.testnet})")
             return
@@ -119,14 +120,11 @@ class ExchangeClient:
             proxy_config = self.settings.llm.proxy if hasattr(self.settings.llm, 'proxy') else None
 
         if proxy_config:
-            proxy_http = proxy_config.http
-            proxy_https = proxy_config.https
-            if proxy_http or proxy_https:
-                config["proxy"] = {
-                    "http": proxy_http,
-                    "https": proxy_https,
-                }
-                logger.info(f"使用代理: HTTP={proxy_http}, HTTPS={proxy_https}")
+            proxy_url = proxy_config.https or proxy_config.http
+            if proxy_url:
+                # ccxt 4.x 需要字符串格式的代理 URL，且需要尾部斜杠
+                config["proxy"] = proxy_url.rstrip('/') + '/'
+                logger.info(f"使用代理: {config['proxy']}")
 
         self.exchange = exchange_class(config)
 
