@@ -75,11 +75,6 @@ class TurtleTradingStrategy(BaseStrategy):
         df['entry_upper'] = entry_df['upper']
         df['entry_lower'] = entry_df['lower']
 
-        # 计算出场唐奇安通道
-        exit_df = calculate_donchian_channel(df, period=self.exit_period)
-        df['exit_upper'] = exit_df['upper']
-        df['exit_lower'] = exit_df['lower']
-
         # 计算 ATR
         df = calculate_atr(df, period=self.atr_period, drop_columns=False)
 

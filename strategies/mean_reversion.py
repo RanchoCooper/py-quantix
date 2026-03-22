@@ -34,19 +34,19 @@ class MeanReversionStrategy(BaseStrategy):
         Args:
             kwargs: 策略参数字典
                 - period: 计算移动平均线和标准差的周期，默认为 20
-                - std_dev_multiplier: 标准差乘数（布林带宽度），默认为 2.0
+                - std_multiplier: 标准差乘数（布林带宽度），默认为 2.0
                 - rsi_period: RSI 计算周期，默认为 14
                 - rsi_oversold: RSI 超卖阈值，默认为 30
                 - rsi_overbought: RSI 超买阈值，默认为 70
         """
         self.period = kwargs.get('period', 20)
-        self.std_dev_multiplier = kwargs.get('std_dev_multiplier', 2.0)
+        self.std_multiplier = kwargs.get('std_multiplier', 2.0)
         self.rsi_period = kwargs.get('rsi_period', 14)
         self.rsi_oversold = kwargs.get('rsi_oversold', 30)
         self.rsi_overbought = kwargs.get('rsi_overbought', 70)
         logger.info(
             f"均值回归策略初始化，周期={self.period}，"
-            f"标准差乘数={self.std_dev_multiplier}，"
+            f"标准差乘数={self.std_multiplier}，"
             f"RSI周期={self.rsi_period}"
         )
 
@@ -66,7 +66,7 @@ class MeanReversionStrategy(BaseStrategy):
         df = calculate_bollinger_bands(
             df,
             period=self.period,
-            std_multiplier=self.std_dev_multiplier
+            std_multiplier=self.std_multiplier
         )
 
         # 计算 RSI

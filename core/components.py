@@ -7,7 +7,23 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from utils.symbol_parser import parse_symbol_config
+
+def _run_async(coro):
+    """
+    安全运行异步函数
+
+    如果已经在事件循环中，使用现有循环；否则创建新循环
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        # 已经在循环中，异步调用
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(asyncio.run, coro)
+            return future.result()
+    except RuntimeError:
+        # 没有运行中的循环，创建新循环
+        return asyncio.run(coro)
 
 
 class SignalProcessor:
@@ -39,8 +55,7 @@ class SignalProcessor:
         """
         try:
             # 获取市场数据
-            import asyncio
-            klines = asyncio.run(
+            klines = _run_async(
                 self.client.fetch_ohlcv(
                     symbol=symbol,
                     timeframe="1h",
@@ -153,7 +168,7 @@ class TradeExecutor:
         try:
             side = signal['action'].upper()
 
-            order = asyncio.run(
+            order = _run_async(
                 self.client.create_order(
                     symbol=symbol,
                     side=side.lower(),

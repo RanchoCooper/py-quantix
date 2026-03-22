@@ -3,6 +3,7 @@
 支持多种 API 客户端：ccxt (统一交易所 API) 和 Binance 官方 API
 """
 import asyncio
+import time
 from datetime import datetime, timezone
 from typing import Any, Optional, List, Dict
 
@@ -217,7 +218,7 @@ class ExchangeClient:
         limit: int = 100
     ) -> Dict[str, List[List]]:
         """
-        批量获取多个交易对的K线数据
+        批量获取多个交易对的K线数据（异步版本）
 
         Args:
             symbols: 交易对列表
@@ -232,23 +233,7 @@ class ExchangeClient:
             return await self._binance_client.get_multiple_symbols(symbols, timeframe, limit)
 
         # 使用 ccxt 客户端
-        import time
-
-        results: Dict[str, List[List]] = {}
-        for symbol in symbols:
-            try:
-                klines = await self.fetch_ohlcv(symbol, timeframe, limit)
-                if klines:
-                    results[symbol] = klines
-                else:
-                    logger.warning(f"获取 {symbol} 数据失败")
-            except Exception as e:
-                logger.warning(f"获取 {symbol} 数据失败: {e}")
-
-            time.sleep(0.2)  # 避免请求过快
-
-        logger.info(f"成功获取 {len(results)}/{len(symbols)} 个交易对的数据")
-        return results
+        return await self._fetch_symbols_impl(symbols, timeframe, limit, async_mode=True)
 
     def fetch_klines(
         self,
@@ -272,12 +257,36 @@ class ExchangeClient:
             return self._binance_client.fetch_klines(symbols, timeframe, limit)
 
         # 使用 ccxt 客户端
+        return asyncio.run(self._fetch_symbols_impl(symbols, timeframe, limit, async_mode=False))
+
+    async def _fetch_symbols_impl(
+        self,
+        symbols: List[str],
+        timeframe: str,
+        limit: int,
+        async_mode: bool = True
+    ) -> Dict[str, List[List]]:
+        """
+        批量获取K线数据的内部实现
+
+        Args:
+            symbols: 交易对列表
+            timeframe: K线周期
+            limit: 获取数量
+            async_mode: 是否使用异步获取
+
+        Returns:
+            {symbol: klines} 字典
+        """
         import time
 
         results: Dict[str, List[List]] = {}
         for symbol in symbols:
             try:
-                klines = asyncio.run(self.fetch_ohlcv(symbol, timeframe, limit))
+                if async_mode:
+                    klines = await self.fetch_ohlcv(symbol, timeframe, limit)
+                else:
+                    klines = await self.fetch_ohlcv(symbol, timeframe, limit)
                 if klines:
                     results[symbol] = klines
                 else:
