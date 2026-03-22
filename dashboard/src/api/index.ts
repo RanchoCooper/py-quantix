@@ -284,40 +284,105 @@ export const analysisApi = {
   }): Promise<Signal> => api.post('/signals', data),
 }
 
-// 设置相关
+// 设置相关 - 与 config.yaml 配置项对应
+export interface ProxySettings {
+  http: string
+  https: string
+}
+
+export interface RunSettings {
+  run_mode: string
+  signal_output: string[]
+}
+
+export interface ExchangeSettings {
+  api_client: string
+  testnet: boolean
+  mode: string
+  proxy: ProxySettings
+}
+
+export interface BinanceSettings {
+  api_key?: string
+  api_key_configured: boolean
+  api_secret?: string
+  api_secret_configured: boolean
+}
+
+export interface StrategyParams {
+  period: number | undefined
+  multiplier: number | undefined
+  std_dev_multiplier: number | undefined
+  entry_period: number | undefined
+  exit_period: number | undefined
+  atr_period: number | undefined
+}
+
+export interface StrategiesSettings {
+  trend_following: StrategyParams
+  mean_reversion: StrategyParams
+  turtle_trading: StrategyParams
+}
+
+export interface DingtalkSettings {
+  webhook_url: string
+  secret: string
+  enabled: boolean
+}
+
+export interface FeishuSettings {
+  webhook_url: string
+  template_id: string
+  template_version: string
+  enabled: boolean
+}
+
+export interface NotificationSettings {
+  dingtalk: DingtalkSettings
+  feishu: FeishuSettings
+}
+
+export interface LoggingSettings {
+  level: string
+  file: string
+}
+
+export interface LLMSettings {
+  enabled: boolean
+  api_key?: string
+  api_key_configured: boolean
+  base_url: string
+  model: string
+  style: string
+  style_options: string[]
+  proxy: ProxySettings
+}
+
+export interface MarketDataSettings {
+  interval: string
+  limit: number
+}
+
+export interface SystemSettings {
+  db_path: string
+  api_port: number
+}
+
+export interface TradingSettings {
+  confirm_via_feishu: boolean
+}
+
 export interface AppSettings {
-  llm: {
-    enabled: boolean
-    api_key?: string
-    api_key_configured: boolean
-    base_url: string
-    model: string
-    style: string
-    style_options: string[]
-  }
-  notifications: {
-    enabled: boolean
-    feishu_webhook: string
-    feishu_secret: string
-    notify_on_trade: boolean
-    notify_on_error: boolean
-    notify_on_daily: boolean
-  }
-  trading: {
-    default_leverage: number
-    default_fee_rate: number
-    confirm_via_feishu: boolean
-    default_symbols: string[]
-  }
-  market: {
-    default_timeframe: string
-    testnet: boolean
-    symbols: string[]
-  }
-  system: {
-    db_path: string
-    api_port: number
-  }
+  run: RunSettings
+  exchange: ExchangeSettings
+  binance: BinanceSettings
+  trading: TradingSettings
+  strategies: StrategiesSettings
+  notifications: NotificationSettings
+  logging: LoggingSettings
+  llm: LLMSettings
+  market_data: MarketDataSettings
+  system: SystemSettings
 }
 
 export const settingsApi = {
