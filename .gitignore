@@ -180,4 +180,12 @@ Thumbs.db
 config/config.json
 config/config.yaml
 config/.env.backup
+
+# Backtest results
 backtest_results.json
+
+# nodejs dependency
+dashboard/node_modules/
+
+# Data
+data/
