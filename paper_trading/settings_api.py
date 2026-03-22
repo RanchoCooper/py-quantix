@@ -2,9 +2,20 @@
 设置管理 API
 提供运行时配置管理，页面设置优先级高于 config.yaml
 设置存储在内存中（重启重置），如需持久化可保存到 JSON
+
+配置项分类：
+1. run: 运行设置 (run_mode, signal_output)
+2. exchange: 交易所配置 (api_client, testnet, mode, proxy)
+3. binance: 币安凭证 (api_key, api_secret) - 敏感
+4. trading: 交易配置 (symbols, 策略参数)
+5. strategies: 策略配置 (trend_following, mean_reversion, turtle_trading)
+6. notifications: 通知配置 (dingtalk, feishu)
+7. logging: 日志配置 (level, file)
+8. llm: LLM分析配置
+9. market_data: 市场数据配置
 """
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
@@ -12,41 +23,109 @@ from pydantic import BaseModel, Field
 
 # ==================== 设置数据模型 ====================
 
-class LLMSettings(BaseModel):
-    """LLM 分析设置"""
-    enabled: bool = False
-    # api_key 只在 PUT 时接收，永不在 GET 响应中返回
+class RunSettings(BaseModel):
+    """运行设置"""
+    run_mode: str = Field(default="monitor", description="monitor / analyzer")
+    signal_output: List[str] = Field(default_factory=lambda: ["console"], description="console / dingtalk / feishu")
+
+
+class ProxySettings(BaseModel):
+    """代理配置"""
+    http: str = ""
+    https: str = ""
+
+
+class ExchangeSettings(BaseModel):
+    """交易所配置"""
+    api_client: str = Field(default="ccxt", description="ccxt / binance")
+    testnet: bool = Field(default=True, description="是否使用测试网络")
+    mode: str = Field(default="futures", description="spot / futures / swap")
+    proxy: ProxySettings = Field(default_factory=ProxySettings)
+
+
+class BinanceSettings(BaseModel):
+    """币安凭证（敏感信息）"""
     api_key: Optional[str] = Field(None, exclude=True)
-    api_key_configured: bool = False  # GET 响应用，指示是否已配置
-    base_url: str = "https://api.minimax.chat/v1"
-    model: str = "Claude Opus-4.6"
-    style: str = "基本面+技术面"
-    style_options: list[str] = ["基本面+技术面", "纯技术面", "波段交易", "趋势跟踪", "均值回归"]
+    api_key_configured: bool = False
+    api_secret: Optional[str] = Field(None, exclude=True)
+    api_secret_configured: bool = False
+
+
+class SymbolConfig(BaseModel):
+    """单个交易对配置"""
+    symbol: str
+    leverage: int = Field(default=10, ge=1, le=125)
+    position_size: float = Field(default=0.001, ge=0)
+    strategy: str = Field(default="trend_following")
+    strategy_params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TradingSettings(BaseModel):
+    """交易配置"""
+    symbols: List[SymbolConfig] = Field(default_factory=list)
+    confirm_via_feishu: bool = Field(default=False)
+
+
+class StrategyParams(BaseModel):
+    """策略参数"""
+    period: Optional[int] = None
+    multiplier: Optional[float] = None
+    std_dev_multiplier: Optional[float] = None
+    entry_period: Optional[int] = None
+    exit_period: Optional[int] = None
+    atr_period: Optional[int] = None
+
+
+class StrategiesSettings(BaseModel):
+    """策略配置"""
+    trend_following: StrategyParams = Field(default_factory=StrategyParams)
+    mean_reversion: StrategyParams = Field(default_factory=StrategyParams)
+    turtle_trading: StrategyParams = Field(default_factory=StrategyParams)
+
+
+class DingtalkSettings(BaseModel):
+    """钉钉通知设置"""
+    webhook_url: str = ""
+    secret: str = ""
+    enabled: bool = Field(default=False)
+
+
+class FeishuSettings(BaseModel):
+    """飞书通知设置"""
+    webhook_url: str = ""
+    template_id: str = ""
+    template_version: str = ""
+    enabled: bool = Field(default=True)
 
 
 class NotificationSettings(BaseModel):
     """通知设置"""
-    enabled: bool = True
-    feishu_webhook: str = ""
-    feishu_secret: str = ""
-    notify_on_trade: bool = True
-    notify_on_error: bool = True
-    notify_on_daily: bool = True
+    dingtalk: DingtalkSettings = Field(default_factory=DingtalkSettings)
+    feishu: FeishuSettings = Field(default_factory=FeishuSettings)
 
 
-class TradingSettings(BaseModel):
-    """交易设置"""
-    default_leverage: int = Field(default=10, ge=1, le=125)
-    default_fee_rate: float = Field(default=0.0004, ge=0, le=0.01)
-    confirm_via_feishu: bool = False
-    default_symbols: list[str] = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]
+class LoggingSettings(BaseModel):
+    """日志配置"""
+    level: str = Field(default="INFO")
+    file: str = Field(default="logs/trading.log")
 
 
-class MarketSettings(BaseModel):
-    """市场数据设置"""
-    default_timeframe: str = Field(default="1h")
-    testnet: bool = True
-    symbols: list[str] = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"]
+class LLMSettings(BaseModel):
+    """LLM 分析设置"""
+    enabled: bool = False
+    api_key: Optional[str] = Field(None, exclude=True)
+    api_key_configured: bool = False
+    base_url: str = "https://api.minimax.chat/v1"
+    model: str = "Claude Opus-4.6"
+    style: str = "基本面+技术面"
+    style_options: List[str] = ["基本面+技术面", "纯技术面", "波段交易", "趋势跟踪", "均值回归"]
+    proxy: ProxySettings = Field(default_factory=ProxySettings)
+
+
+class MarketDataSettings(BaseModel):
+    """市场数据配置"""
+    interval: str = Field(default="1h")
+    limit: int = Field(default=100, ge=10, le=1000)
 
 
 class SystemSettings(BaseModel):
@@ -57,10 +136,15 @@ class SystemSettings(BaseModel):
 
 class AppSettings(BaseModel):
     """完整应用设置"""
-    llm: LLMSettings = Field(default_factory=LLMSettings)
-    notifications: NotificationSettings = Field(default_factory=NotificationSettings)
+    run: RunSettings = Field(default_factory=RunSettings)
+    exchange: ExchangeSettings = Field(default_factory=ExchangeSettings)
+    binance: BinanceSettings = Field(default_factory=BinanceSettings)
     trading: TradingSettings = Field(default_factory=TradingSettings)
-    market: MarketSettings = Field(default_factory=MarketSettings)
+    strategies: StrategiesSettings = Field(default_factory=StrategiesSettings)
+    notifications: NotificationSettings = Field(default_factory=NotificationSettings)
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    llm: LLMSettings = Field(default_factory=LLMSettings)
+    market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
     system: SystemSettings = Field(default_factory=SystemSettings)
 
 
@@ -72,8 +156,8 @@ _cached_base_settings: Optional[AppSettings] = None
 # 运行时覆盖设置（页面级别，高优先级）
 _runtime_overrides: Dict[str, Any] = {}
 
-# 存储 API Key（单独管理，永不序列化到缓存）
-_stored_api_keys: Dict[str, str] = {}
+# 存储敏感信息（永不序列化到缓存）
+_stored_secrets: Dict[str, str] = {}
 
 
 def _load_from_config() -> AppSettings:
@@ -82,63 +166,141 @@ def _load_from_config() -> AppSettings:
     if _cached_base_settings is not None:
         return _cached_base_settings
 
-    llm = LLMSettings()
-    notifications = NotificationSettings()
+    # 初始化所有设置对象
+    run = RunSettings()
+    exchange = ExchangeSettings()
+    binance = BinanceSettings()
     trading = TradingSettings()
-    market = MarketSettings()
+    strategies = StrategiesSettings()
+    notifications = NotificationSettings()
+    logging_cfg = LoggingSettings()
+    llm = LLMSettings()
+    market_data = MarketDataSettings()
     system = SystemSettings()
 
     try:
         from config.settings import get_settings
         cfg = get_settings()
 
+        # 运行设置
+        if hasattr(cfg, "run_mode") and cfg.run_mode:
+            run.run_mode = cfg.run_mode
+        if hasattr(cfg, "signal_output") and cfg.signal_output:
+            run.signal_output = cfg.signal_output if isinstance(cfg.signal_output, list) else [cfg.signal_output]
+
+        # 交易所配置
+        e = getattr(cfg, "exchange", None)
+        if e:
+            if hasattr(e, "api_client") and e.api_client:
+                exchange.api_client = e.api_client
+            if hasattr(e, "testnet"):
+                exchange.testnet = e.testnet
+            if hasattr(e, "mode") and e.mode:
+                exchange.mode = e.mode
+            proxy = getattr(e, "proxy", None)
+            if proxy:
+                exchange.proxy.http = getattr(proxy, "http", "") or ""
+                exchange.proxy.https = getattr(proxy, "https", "") or ""
+
+        # 币安凭证
+        b = getattr(cfg, "binance", None)
+        if b:
+            if getattr(b, "api_key", None):
+                binance.api_key_configured = True
+                _stored_secrets["binance_api_key"] = b.api_key
+            if getattr(b, "api_secret", None):
+                binance.api_secret_configured = True
+                _stored_secrets["binance_api_secret"] = b.api_secret
+
+        # 交易配置
+        t = getattr(cfg, "trading", None)
+        if t:
+            symbols_cfg = getattr(t, "symbols", [])
+            if symbols_cfg and isinstance(symbols_cfg, list):
+                trading.symbols = [
+                    SymbolConfig(
+                        symbol=item.get("symbol", "") if isinstance(item, dict) else item,
+                        leverage=item.get("leverage", 10) if isinstance(item, dict) else 10,
+                        position_size=item.get("position_size", 0.001) if isinstance(item, dict) else 0.001,
+                        strategy=item.get("strategy", "trend_following") if isinstance(item, dict) else "trend_following",
+                        strategy_params=item.get("strategy_params", {}) if isinstance(item, dict) else {},
+                    )
+                    for item in symbols_cfg
+                ]
+
+        # 策略配置
+        s = getattr(cfg, "strategies", None)
+        if s:
+            tf = getattr(s, "trend_following", None)
+            if tf:
+                strategies.trend_following = StrategyParams(
+                    period=getattr(tf, "period", None),
+                    multiplier=getattr(tf, "multiplier", None),
+                )
+            mr = getattr(s, "mean_reversion", None)
+            if mr:
+                strategies.mean_reversion = StrategyParams(
+                    period=getattr(mr, "period", None),
+                    std_dev_multiplier=getattr(mr, "std_dev_multiplier", None),
+                )
+            tt = getattr(s, "turtle_trading", None)
+            if tt:
+                strategies.turtle_trading = StrategyParams(
+                    entry_period=getattr(tt, "entry_period", None),
+                    exit_period=getattr(tt, "exit_period", None),
+                    atr_period=getattr(tt, "atr_period", None),
+                )
+
+        # 通知配置
+        n = getattr(cfg, "notifications", None)
+        if n:
+            dt = getattr(n, "dingtalk", None)
+            if dt:
+                notifications.dingtalk.webhook_url = getattr(dt, "webhook_url", "") or ""
+                notifications.dingtalk.secret = getattr(dt, "secret", "") or ""
+            fs = getattr(n, "feishu", None)
+            if fs:
+                notifications.feishu.webhook_url = getattr(fs, "webhook_url", "") or ""
+                notifications.feishu.template_id = getattr(fs, "template_id", "") or ""
+                notifications.feishu.template_version = getattr(fs, "template_version", "") or ""
+
+        # 日志配置
+        l = getattr(cfg, "logging", None)
+        if l:
+            if hasattr(l, "level") and l.level:
+                logging_cfg.level = l.level
+            if hasattr(l, "file") and l.file:
+                logging_cfg.file = l.file
+
         # LLM 配置
         if hasattr(cfg, "llm") and cfg.llm:
             llm.enabled = cfg.llm.enabled or False
             if cfg.llm.api_key:
                 llm.api_key_configured = True
-                _stored_api_keys["llm"] = cfg.llm.api_key
+                _stored_secrets["llm_api_key"] = cfg.llm.api_key
             if cfg.llm.base_url:
                 llm.base_url = cfg.llm.base_url
             if cfg.llm.model:
                 llm.model = cfg.llm.model
             if cfg.llm.style:
                 llm.style = cfg.llm.style
+            llm_proxy = getattr(cfg.llm, "proxy", None)
+            if llm_proxy:
+                llm.proxy.http = getattr(llm_proxy, "http", "") or ""
+                llm.proxy.https = getattr(llm_proxy, "https", "") or ""
 
-        # 通知配置
-        n = getattr(cfg, "notifications", None)
-        if n:
-            notifications.enabled = getattr(n, "enabled", True)
-            feishu = getattr(n, "feishu", None)
-            if feishu and getattr(feishu, "webhook_url", None):
-                notifications.feishu_webhook = feishu.webhook_url
-            if feishu and getattr(feishu, "secret", None):
-                notifications.feishu_secret = feishu.secret
-            notifications.notify_on_trade = getattr(n, "notify_on_trade", True)
-            notifications.notify_on_error = getattr(n, "notify_on_error", True)
-            notifications.notify_on_daily = getattr(n, "notify_on_daily", True)
+        # 市场数据配置
+        md = getattr(cfg, "market_data", None)
+        if md:
+            if hasattr(md, "interval") and md.interval:
+                market_data.interval = md.interval
+            if hasattr(md, "limit"):
+                market_data.limit = md.limit
 
-        # 交易配置
-        t = getattr(cfg, "trading", None)
-        if t:
-            if getattr(t, "leverage", None):
-                trading.default_leverage = min(max(t.leverage, 1), 125)
-            symbols = getattr(t, "symbols", [])
-            if symbols and isinstance(symbols, list) and isinstance(symbols[0], str):
-                trading.default_symbols = symbols
-
-        # 市场配置
-        d = getattr(cfg, "data", None)
-        if d and getattr(d, "default_timeframe", None):
-            market.default_timeframe = d.default_timeframe
-
-        e = getattr(cfg, "exchange", None)
-        if e:
-            market.testnet = getattr(e, "testnet", True)
-
-    except Exception:
+    except Exception as e:
         # 允许 config.yaml 不存在或格式错误，使用默认值
-        pass
+        import logging
+        logging.getLogger(__name__).warning(f"加载配置文件失败，使用默认值: {e}")
 
     # 系统设置
     db_path = os.getenv("PAPER_TRADING_DB", "")
@@ -152,10 +314,15 @@ def _load_from_config() -> AppSettings:
     system.db_path = db_path or "data/paper_trading.db"
 
     _cached_base_settings = AppSettings(
-        llm=llm,
-        notifications=notifications,
+        run=run,
+        exchange=exchange,
+        binance=binance,
         trading=trading,
-        market=market,
+        strategies=strategies,
+        notifications=notifications,
+        logging=logging_cfg,
+        llm=llm,
+        market_data=market_data,
         system=system,
     )
     return _cached_base_settings
@@ -171,19 +338,23 @@ def _merge_settings(base: AppSettings, overrides: Dict[str, Any]) -> AppSettings
         target = getattr(result, category)
         if isinstance(target, BaseModel):
             for key, value in values.items():
-                # api_key 特殊处理：存储到 _stored_api_keys
-                if key == "api_key" and value:
-                    _stored_api_keys[category] = value
+                # 敏感信息特殊处理：存储到 _stored_secrets
+                if key in ("api_key", "api_secret") and value:
+                    _stored_secrets[f"{category}_{key}"] = value
                     continue
                 if value is not None and hasattr(target, key):
                     setattr(target, key, value)
 
-    # 补充 api_key_configured 状态
+    # 补充敏感信息配置状态
+    result.binance.api_key_configured = bool(
+        _stored_secrets.get("binance_api_key") or getattr(base.binance, "api_key_configured", False)
+    )
+    result.binance.api_secret_configured = bool(
+        _stored_secrets.get("binance_api_secret") or getattr(base.binance, "api_secret_configured", False)
+    )
     result.llm.api_key_configured = bool(
-        _stored_api_keys.get("llm") or
-        (getattr(base.llm, "api_key_configured", False) or
-        (overrides.get("llm") or {}).get("api_key")
-    ))
+        _stored_secrets.get("llm_api_key") or getattr(base.llm, "api_key_configured", False)
+    )
 
     return result
 
@@ -216,11 +387,16 @@ def register_settings_routes(app: FastAPI):
         """
         更新页面级设置（仅更新非空字段）
 
-        设置分为以下类别：
-        - llm: LLM 分析配置
-        - notifications: 通知配置
+        配置分类：
+        - run: 运行设置
+        - exchange: 交易所配置
+        - binance: 币安凭证
         - trading: 交易配置
-        - market: 市场配置
+        - strategies: 策略配置
+        - notifications: 通知配置
+        - logging: 日志配置
+        - llm: LLM分析配置
+        - market_data: 市场数据配置
         """
         global _runtime_overrides
 
@@ -233,14 +409,25 @@ def register_settings_routes(app: FastAPI):
                 if v != "" and v != []
             }
 
-        if settings.llm:
-            updates["llm"] = non_null(settings.llm)
-        if settings.notifications:
-            updates["notifications"] = non_null(settings.notifications)
+        # 处理所有配置分类
+        if settings.run:
+            updates["run"] = non_null(settings.run)
+        if settings.exchange:
+            updates["exchange"] = non_null(settings.exchange)
+        if settings.binance:
+            updates["binance"] = non_null(settings.binance)
         if settings.trading:
             updates["trading"] = non_null(settings.trading)
-        if settings.market:
-            updates["market"] = non_null(settings.market)
+        if settings.strategies:
+            updates["strategies"] = non_null(settings.strategies)
+        if settings.notifications:
+            updates["notifications"] = non_null(settings.notifications)
+        if settings.logging:
+            updates["logging"] = non_null(settings.logging)
+        if settings.llm:
+            updates["llm"] = non_null(settings.llm)
+        if settings.market_data:
+            updates["market_data"] = non_null(settings.market_data)
 
         if updates:
             _runtime_overrides.update(updates)
@@ -250,9 +437,9 @@ def register_settings_routes(app: FastAPI):
     @app.delete("/api/settings", response_model=AppSettings, tags=["设置"])
     async def reset_settings():
         """重置所有页面覆盖，恢复到 config.yaml 默认值"""
-        global _runtime_overrides, _stored_api_keys
+        global _runtime_overrides, _stored_secrets
         _runtime_overrides.clear()
-        _stored_api_keys.clear()
+        _stored_secrets.clear()
         return _load_from_config()
 
     @app.get("/api/settings/categories", tags=["设置"])

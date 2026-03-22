@@ -6,7 +6,8 @@ import json
 import os
 from contextlib import asynccontextmanager
 from datetime import date
-from typing import Optional, Any
+from typing import Any, Optional
+from starlette.requests import Request
 
 from fastapi import Depends, FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,7 +63,7 @@ def emit_event(event_type: str, data: dict):
 
 # ==================== SSE 实时推送 ====================
 
-async def sse_stream(request: Any):
+async def sse_stream(request: Request):
     """SSE 事件流"""
     app = request.app
     while app.state.running:
@@ -185,7 +186,7 @@ async def readiness_check():
 # ==================== SSE 端点 ====================
 
 @app.get("/api/events/stream")
-async def events_stream(request: Any):
+async def events_stream(request: Request):
     """SSE 实时推送端点"""
     return EventSourceResponse(sse_stream(request))
 
