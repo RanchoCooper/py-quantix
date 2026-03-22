@@ -9,8 +9,10 @@ from typing import Any, Dict, Optional
 import requests
 from loguru import logger
 
+from notifications.base import BaseNotifier
 
-class DingTalkNotifier:
+
+class DingTalkNotifier(BaseNotifier):
     """
     钉钉通知服务，用于发送警报和交易通知
 
@@ -39,7 +41,7 @@ class DingTalkNotifier:
         """
         timestamp = str(round(time.time() * 1000))
         if self.secret:
-            string_to_sign = '{}\n{}'.format(timestamp, self.secret)
+            string_to_sign = f"{timestamp}\n{self.secret}"
             hmac_code = hmac.new(
                 self.secret.encode('utf-8'),
                 string_to_sign.encode('utf-8'),
@@ -49,12 +51,12 @@ class DingTalkNotifier:
             return timestamp, signature
         return timestamp, None
 
-    def _send_message(self, message: Dict[str, Any]) -> bool:
+    def _send_message(self, payload: Dict[str, Any]) -> bool:
         """
         发送消息到钉钉webhook
 
         Args:
-            message: 消息载荷
+            payload: 消息载荷
 
         Returns:
             表示成功与否的布尔值
@@ -71,7 +73,7 @@ class DingTalkNotifier:
             response = requests.post(
                 url,
                 headers={'Content-Type': 'application/json'},
-                data=json.dumps(message)
+                json=payload
             )
 
             result = response.json()
@@ -96,62 +98,18 @@ class DingTalkNotifier:
         Returns:
             表示成功与否的布尔值
         """
-        message = {
+        return self._send_message({
             "msgtype": "text",
-            "text": {
-                "content": content
-            }
-        }
-        return self._send_message(message)
+            "text": {"content": content}
+        })
 
-    def send_trade_notification(self, symbol: str, action: str, price: float,
-                              reason: str = "", position_size: float = 0.0) -> bool:
-        """
-        发送包含详细信息的交易通知
-
-        Args:
-            symbol: 交易对符号
-            action: 交易操作（买入/卖出）
-            price: 执行价格
-            reason: 交易原因
-            position_size: 仓位大小
-
-        Returns:
-            表示成功与否的布尔值
-        """
-        content = "🚨 交易警报 🚨\n"
-        content += f"交易对: {symbol}\n"
-        content += f"操作: {action.upper()}\n"
-        content += f"价格: {price}\n"
-        content += f"仓位大小: {position_size}\n"
-        if reason:
-            content += f"原因: {reason}\n"
-        content += f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
-
-        return self.send_text(content)
-
-    def send_system_alert(self, title: str, message: str) -> bool:
-        """
-        发送系统警报通知
-
-        Args:
-            title: 警报标题
-            message: 警报消息
-
-        Returns:
-            表示成功与否的布尔值
-        """
-        content = "⚠️ 系统警报 ⚠️\n"
-        content += f"标题: {title}\n"
-        content += f"消息: {message}\n"
-        content += f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
-
+    def _send_trade_text(self, content: str) -> bool:
+        """重写父类方法，使用钉钉格式"""
         return self.send_text(content)
 
 
 # 示例用法
 if __name__ == "__main__":
-    # 配置（实际应用中从配置文件加载）
     config = {
         "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=your_token",
         "secret": "your_secret"
@@ -162,7 +120,6 @@ if __name__ == "__main__":
         config["secret"]
     )
 
-    # 示例：发送交易通知
     notifier.send_trade_notification(
         symbol="BTCUSDT",
         action="buy",

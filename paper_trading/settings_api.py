@@ -7,7 +7,7 @@ import os
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 # ==================== 设置数据模型 ====================
@@ -18,7 +18,7 @@ class LLMSettings(BaseModel):
     # api_key 只在 PUT 时接收，永不在 GET 响应中返回
     api_key: Optional[str] = Field(None, exclude=True)
     api_key_configured: bool = False  # GET 响应用，指示是否已配置
-    base_url: HttpUrl = "https://api.minimax.chat/v1"
+    base_url: str = "https://api.minimax.chat/v1"
     model: str = "Claude Opus-4.6"
     style: str = "基本面+技术面"
     style_options: list[str] = ["基本面+技术面", "纯技术面", "波段交易", "趋势跟踪", "均值回归"]

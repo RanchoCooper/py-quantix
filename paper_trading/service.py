@@ -163,7 +163,7 @@ class PaperTradingService:
         # 发送飞书确认
         feishu = get_feishu_integration()
         if feishu:
-            feishu.send_order_confirmation(
+            await feishu.send_order_confirmation(
                 signal_id=signal.id,
                 account_id=account_id,
                 symbol=symbol,

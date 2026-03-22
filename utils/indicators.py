@@ -113,15 +113,25 @@ def calculate_rsi(
     delta = df[column].diff()
 
     # 分离涨跌
-    gain = delta.where(delta > 0, 0)
-    loss = (-delta).where(delta < 0, 0)
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta).where(delta < 0, 0.0)
 
-    # 计算平均涨跌
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = loss.rolling(window=period).mean()
+    # Wilder 平滑 RSI
+    # 第一值使用 SMA，后续使用 (prev * (period-1) + current) / period
+    avg_gain = pd.Series(index=df.index, dtype=float)
+    avg_loss = pd.Series(index=df.index, dtype=float)
+
+    # 初始化第一个值
+    avg_gain.iloc[period - 1] = gain.iloc[:period].mean()
+    avg_loss.iloc[period - 1] = loss.iloc[:period].mean()
+
+    # Wilder 平滑
+    for i in range(period, len(df)):
+        avg_gain.iloc[i] = (avg_gain.iloc[i - 1] * (period - 1) + gain.iloc[i]) / period
+        avg_loss.iloc[i] = (avg_loss.iloc[i - 1] * (period - 1) + loss.iloc[i]) / period
 
     # 计算 RS 和 RSI
-    rs = avg_gain / avg_loss
+    rs = avg_gain / avg_loss.replace(0, float('inf'))
     df['rsi'] = 100 - (100 / (1 + rs))
 
     if drop_columns:

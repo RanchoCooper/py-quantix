@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
-import requests
+import httpx
 from loguru import logger
 
 from paper_trading import storage
@@ -24,14 +24,33 @@ class FeishuOrderIntegration:
         self.webhook_url = webhook_url
         self.secret = secret
 
-    def _send_message(self, payload: dict) -> bool:
-        """发送消息到飞书 webhook"""
+    async def _send_message_async(self, payload: dict) -> bool:
+        """异步发送消息到飞书 webhook"""
         try:
-            response = requests.post(
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.webhook_url,
+                    json=payload,
+                    timeout=10.0,
+                )
+            result = response.json()
+            if result.get("code") == 0:
+                logger.info("飞书订单确认卡片发送成功")
+                return True
+            else:
+                logger.error(f"飞书消息发送失败: {result.get('msg')}")
+                return False
+        except Exception as e:
+            logger.error(f"飞书消息发送异常: {e}")
+            return False
+
+    def _send_message(self, payload: dict) -> bool:
+        """发送消息到飞书 webhook（同步版本，兼容非异步场景）"""
+        try:
+            response = httpx.post(
                 self.webhook_url,
-                headers={"Content-Type": "application/json"},
-                data=json.dumps(payload),
-                timeout=10,
+                json=payload,
+                timeout=10.0,
             )
             result = response.json()
             if result.get("code") == 0:
@@ -44,7 +63,7 @@ class FeishuOrderIntegration:
             logger.error(f"飞书消息发送异常: {e}")
             return False
 
-    def send_order_confirmation(
+    async def send_order_confirmation(
         self,
         signal_id: str,
         account_id: str,
@@ -135,7 +154,7 @@ class FeishuOrderIntegration:
             },
         }
 
-        return self._send_message(payload)
+        return await self._send_message_async(payload)
 
     def parse_callback(self, body: dict) -> Optional[dict]:
         """

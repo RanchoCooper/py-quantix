@@ -3,6 +3,7 @@ Binance 官方 API 客户端
 使用 python-binance 库实现
 """
 import asyncio
+import time
 from datetime import datetime, timezone
 from typing import Any, Optional, List, Dict
 
@@ -229,8 +230,6 @@ class BinanceClient:
         limit: int = 100
     ) -> Dict[str, List[List]]:
         """批量获取多个交易对的K线数据（异步版本）"""
-        import time
-
         results: Dict[str, List[List]] = {}
         for symbol in symbols:
             try:

@@ -4,8 +4,12 @@ K线数据格式化模块
 将原始K线数据转换为适合大模型分析的格式
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from datetime import datetime
+
+# ==================== 常量定义 ====================
+MA_PERIODS = (5, 10, 20)
+VOLATILITY_PERIOD = 14
 
 
 class DataFormatter:
@@ -103,6 +107,9 @@ class DataFormatter:
 
         Returns:
             字典格式的K线列表
+
+        Raises:
+            ValueError: 当K线元素少于6个字段时
         """
         if not klines:
             return []
@@ -116,6 +123,8 @@ class DataFormatter:
         # ccxt 格式: [timestamp, open, high, low, close, volume, ...]
         normalized = []
         for k in klines:
+            if len(k) < 6:
+                raise ValueError(f"K线元素至少需要6个字段，实际: {len(k)}")
             normalized.append({
                 'open_time': k[0],
                 'open': float(k[1]),
@@ -136,17 +145,16 @@ class DataFormatter:
         volumes = [k['volume'] for k in klines]
 
         # 移动平均线
-        ma5 = sum(closes[-5:]) / 5 if len(closes) >= 5 else 0
-        ma10 = sum(closes[-10:]) / 10 if len(closes) >= 10 else 0
-        ma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else 0
+        ma5 = sum(closes[-5:]) / MA_PERIODS[0] if len(closes) >= MA_PERIODS[0] else 0
+        ma10 = sum(closes[-10:]) / MA_PERIODS[1] if len(closes) >= MA_PERIODS[1] else 0
+        ma20 = sum(closes[-20:]) / MA_PERIODS[2] if len(closes) >= MA_PERIODS[2] else 0
 
         # 成交量变化
         avg_volume = sum(volumes[-5:]) / 5
         volume_change = ((volumes[-1] - avg_volume) / avg_volume * 100) if avg_volume > 0 else 0
 
-        # 波动率 (ATR简化版)
-        high_low = [k['high'] - k['low'] for k in klines[-14:] if len(klines) >= 14]
-        volatility = (sum(high_low) / len(high_low) / closes[-1] * 100) if high_low else 0
+        # 波动率 (真正的 ATR)
+        volatility = self._calculate_atr(klines)
 
         return {
             'ma5': ma5,
@@ -156,9 +164,40 @@ class DataFormatter:
             'volatility': volatility
         }
 
+    def _calculate_atr(self, klines: List[Dict[str, Any]]) -> float:
+        """
+        计算平均真实波幅 (ATR)
+
+        使用 True Range: max(high-low, |high-prev_close|, |low-prev_close|)
+        """
+        if len(klines) < VOLATILITY_PERIOD:
+            return 0.0
+
+        true_ranges = []
+        for i in range(-VOLATILITY_PERIOD, 0):
+            current = klines[i]
+            prev = klines[i - 1] if i > 0 else current
+            tr0 = current['high'] - current['low']
+            tr1 = abs(current['high'] - prev['close'])
+            tr2 = abs(current['low'] - prev['close'])
+            true_ranges.append(max(tr0, tr1, tr2))
+
+        atr = sum(true_ranges) / VOLATILITY_PERIOD
+        return atr / klines[-1]['close'] * 100
+
     def _format_time(self, timestamp: int) -> str:
-        """格式化时间戳"""
-        dt = datetime.fromtimestamp(timestamp / 1000)
+        """
+        格式化时间戳
+
+        Args:
+            timestamp: 时间戳（支持毫秒或秒，自动检测）
+
+        Returns:
+            格式化的时间字符串
+        """
+        # 自动检测时间戳单位：> 10^10 则为毫秒，否则为秒
+        ts = timestamp / 1000 if timestamp > 10**10 else timestamp
+        dt = datetime.fromtimestamp(ts)
         return dt.strftime("%Y-%m-%d %H:%M")
 
     def _calc_change_percent(self, old: float, new: float) -> float:

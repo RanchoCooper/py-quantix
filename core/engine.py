@@ -15,12 +15,12 @@ from core.components import (
     TradeExecutor,
     PositionManager,
     NotificationManager,
-    parse_symbol_config,
 )
 from data.fetchers.market_fetcher import ExchangeClient
 from notifications.dingtalk import DingTalkNotifier
 from notifications.feishu import FeishuNotifier
 from utils.config_manager import ConfigManager
+from utils.symbol_parser import parse_symbol_config
 
 
 def create_engine(

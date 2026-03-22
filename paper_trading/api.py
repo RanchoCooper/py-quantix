@@ -172,9 +172,10 @@ async def readiness_check():
     """就绪检查端点"""
     try:
         # 检查数据库连接
+        from sqlalchemy import text
         from paper_trading.database import engine
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         return {"status": "ready", "database": "connected"}
     except Exception as e:
         logger.error(f"Readiness check failed: {e}")
