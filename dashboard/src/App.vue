@@ -40,6 +40,14 @@
             <el-icon><Warning /></el-icon>
             <span>仓位管理</span>
           </el-menu-item>
+          <el-menu-item index="/analysis">
+            <el-icon><Cpu /></el-icon>
+            <span>LLM 分析</span>
+          </el-menu-item>
+          <el-menu-item index="/settings">
+            <el-icon><Setting /></el-icon>
+            <span>设置</span>
+          </el-menu-item>
         </el-menu>
 
         <!-- 账户切换 -->
@@ -109,7 +117,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import {
-  HomeFilled, Top, Box, Bottom, DataLine, Clock, Warning, Monitor
+  HomeFilled, Top, Box, Bottom, DataLine, Clock, Warning, Monitor, Cpu, Setting
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { ElMessage } from 'element-plus'

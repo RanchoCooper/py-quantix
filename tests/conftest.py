@@ -62,11 +62,6 @@ async def fresh_db():
     # 重置 app_state
     api_module.app_state["running"] = True
     api_module.app_state["service"] = None
-    while not api_module.app_state["event_queue"].empty():
-        try:
-            api_module.app_state["event_queue"].get_nowait()
-        except asyncio.QueueEmpty:
-            break
 
     yield db_path
 

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 
 const api = axios.create({
@@ -6,9 +7,9 @@ const api = axios.create({
   timeout: 15000,
 })
 
-// 响应拦截器
+// 响应拦截器：自动解包 data
 api.interceptors.response.use(
-  (response) => response.data as any,
+  <T = any>(response: AxiosResponse<T>) => response.data as T,
   (error) => {
     const msg = error.response?.data?.detail || error.message || '请求失败'
     ElMessage.error(msg)
@@ -205,6 +206,126 @@ export const signalApi = {
 export const priceApi = {
   update: (accountId: string, prices: Record<string, number>) =>
     api.post('/prices/update', prices, { params: { account_id: accountId } }),
+}
+
+// 分析相关
+export interface KLineDataPoint {
+  timestamp: number
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export interface SymbolKLineResponse {
+  symbol: string
+  interval: string
+  klines: KLineDataPoint[]
+  fetched_at: string
+}
+
+export interface AnalysisResult {
+  symbol: string
+  timestamp: string
+  interval: string
+  trend: 'bull' | 'bear' | 'neutral'
+  kline_count: number
+  raw_analysis: string
+  indicators: Record<string, any>
+}
+
+export interface AnalysisResponse {
+  timestamp: string
+  results: AnalysisResult[]
+  errors: Record<string, string>
+}
+
+export interface LLMConfig {
+  configured: boolean
+  model: string | null
+  base_url: string | null
+  style_options: string[]
+}
+
+export interface TimeframeOption {
+  value: string
+  label: string
+}
+
+export interface PopularSymbol {
+  value: string
+  label: string
+}
+
+export const analysisApi = {
+  getConfig: (): Promise<LLMConfig> => api.get('/analyzer/config'),
+  getTimeframes: (): Promise<{ options: TimeframeOption[] }> => api.get('/analyzer/timeframes'),
+  getPopularSymbols: (): Promise<{ symbols: PopularSymbol[] }> => api.get('/analyzer/symbols/popular'),
+  fetchKlines: (data: { symbols: string[]; timeframe: string; limit: number }): Promise<SymbolKLineResponse[]> =>
+    api.post('/analyzer/klines', data),
+  analyze: (data: {
+    symbols: string[]
+    timeframe: string
+    limit: number
+    style: string
+    llm_api_key?: string
+    llm_base_url?: string
+    llm_model?: string
+  }): Promise<AnalysisResponse> => api.post('/analyzer/analyze', data),
+  createSignal: (data: {
+    symbol: string
+    signal_type: string
+    timeframe?: string
+    reason?: string
+    entry_price?: number
+    stop_loss?: number
+    take_profit?: number
+  }): Promise<Signal> => api.post('/signals', data),
+}
+
+// 设置相关
+export interface AppSettings {
+  llm: {
+    enabled: boolean
+    api_key?: string
+    api_key_configured: boolean
+    base_url: string
+    model: string
+    style: string
+    style_options: string[]
+  }
+  notifications: {
+    enabled: boolean
+    feishu_webhook: string
+    feishu_secret: string
+    notify_on_trade: boolean
+    notify_on_error: boolean
+    notify_on_daily: boolean
+  }
+  trading: {
+    default_leverage: number
+    default_fee_rate: number
+    confirm_via_feishu: boolean
+    default_symbols: string[]
+  }
+  market: {
+    default_timeframe: string
+    testnet: boolean
+    symbols: string[]
+  }
+  system: {
+    db_path: string
+    api_port: number
+  }
+}
+
+export const settingsApi = {
+  get: (): Promise<AppSettings> => api.get('/settings'),
+  getDefaults: (): Promise<AppSettings> => api.get('/settings/defaults'),
+  update: (data: Partial<AppSettings>): Promise<AppSettings> =>
+    api.put('/settings', data),
+  reset: (): Promise<AppSettings> => api.delete('/settings'),
 }
 
 export default api

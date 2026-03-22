@@ -31,6 +31,14 @@ const router = createRouter({
       path: '/risk',
       component: () => import('@/views/RiskManagement.vue'),
     },
+    {
+      path: '/analysis',
+      component: () => import('@/views/Analysis.vue'),
+    },
+    {
+      path: '/settings',
+      component: () => import('@/views/Settings.vue'),
+    },
   ],
 })
 
