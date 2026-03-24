@@ -7,7 +7,8 @@ from typing import Optional, List, Dict, Any
 from loguru import logger
 
 from paper_trading.config import PaperTradingConfig
-from paper_trading.models import OrderStatus, OrderSide, OrderType
+from paper_trading.calculations import calc_margin, calc_fee, calc_pnl
+from paper_trading.events import EventBus, get_event_bus
 from paper_trading import storage
 
 
@@ -25,25 +26,15 @@ class PaperTradingEngine:
 
     def __init__(self, config: Optional[PaperTradingConfig] = None):
         self.config = config or PaperTradingConfig()
-        self._event_listeners: List = []
+        self._event_bus: EventBus = get_event_bus()
 
-    def add_listener(self, callback):
+    def add_listener(self, handler):
         """注册事件监听器（用于 SSE 推送）"""
-        self._event_listeners.append(callback)
+        self._event_bus.subscribe(handler)
 
-    def _emit(self, event_type: str, data: Any):
-        for listener in self._event_listeners:
-            try:
-                listener(event_type, data)
-            except Exception as e:
-                logger.warning(f"Event listener error: {e}")
+    def _emit(self, event_type: str, data: Dict[str, Any]) -> None:
+        self._event_bus.emit(event_type, data)
 
-    @staticmethod
-    def calc_pnl(side: str, entry_price: float, current_price: float, quantity: float) -> float:
-        """计算多头/空头的已实现或浮动盈亏"""
-        if side == "long":
-            return (current_price - entry_price) * quantity
-        return (entry_price - current_price) * quantity
 
     async def open_position(
         self,
@@ -78,8 +69,8 @@ class PaperTradingEngine:
         if not account:
             return {"success": False, "error": "账户不存在"}
 
-        margin = quantity * entry_price / account.leverage
-        fee = quantity * entry_price * self.config.default_fee_rate
+        margin = calc_margin(quantity, entry_price, account.leverage)
+        fee = calc_fee(quantity * entry_price, self.config.default_fee_rate)
 
         available = account.balance - account.frozen_margin
         if margin > available:
@@ -183,9 +174,9 @@ class PaperTradingEngine:
 
         is_full_close = close_qty >= position.quantity
 
-        margin_release = close_qty * position.entry_price / account.leverage
-        fee = close_qty * exit_price * self.config.default_fee_rate
-        raw_pnl = self.calc_pnl(position.side, position.entry_price, exit_price, close_qty)
+        margin_release = calc_margin(close_qty, position.entry_price, account.leverage)
+        fee = calc_fee(close_qty * exit_price, self.config.default_fee_rate)
+        raw_pnl = calc_pnl(position.side, position.entry_price, exit_price, close_qty)
         pnl = raw_pnl - fee
 
         order = await storage.create_order(
@@ -273,7 +264,7 @@ class PaperTradingEngine:
                 continue
 
             current_price = prices[pos.symbol]
-            unrealized_pnl = self.calc_pnl(pos.side, pos.entry_price, current_price, pos.quantity)
+            unrealized_pnl = calc_pnl(pos.side, pos.entry_price, current_price, pos.quantity)
 
             entry_value = pos.entry_price * pos.quantity
             unrealized_pnl_pct = unrealized_pnl / entry_value * 100 if entry_value > 0 else 0.0

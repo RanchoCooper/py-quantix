@@ -1,22 +1,73 @@
 """
-模拟交易数据模型
-包含 SQLite ORM 模型和 Pydantic 请求/响应模型
+数据库模型 (ORM)
+SQLAlchemy 异步模型定义
+
+Pydantic DTO 已移至 paper_trading.schemas 模块。
+为保持向后兼容，以下 DTO 仍从此模块导出：
 """
 import enum
-from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import (
-    Column, String, Float, Integer, DateTime, Enum as SAEnum,
-    Text, ForeignKey, Index, UniqueConstraint
+    Column, String, Float, Integer, DateTime, Text,
+    ForeignKey, Index, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
 from paper_trading.database import Base, _utcnow
 
+# 枚举定义（可被其他模块复用）
+__all__ = [
+    "PositionSide",
+    "OrderSide",
+    "OrderType",
+    "OrderStatus",
+    "SignalStatus",
+    "SignalType",
+    "OrderSource",
+    "PaperAccount",
+    "Position",
+    "Order",
+    "Signal",
+    "DailyStats",
+]
 
-# ==================== ORM Models ====================
+# 向后兼容：重新导出 schemas（原有的导入路径）
+from paper_trading.schemas import (
+    AccountCreate,
+    AccountUpdate,
+    AccountResponse,
+    OrderCreate,
+    OrderResponse,
+    PositionUpdate,
+    PositionResponse,
+    AccountStatsResponse,
+    DailyStatsResponse,
+    EquityCurvePoint,
+    PaginatedResponse,
+    FeishuConfirmRequest,
+)
+from paper_trading.schemas.signal import SignalCreate, SignalResponse
+
+# SignalStatus 已定义在 models.py 中，不从 schemas 导出
+
+__all__.extend([
+    "AccountCreate",
+    "AccountUpdate",
+    "AccountResponse",
+    "OrderCreate",
+    "OrderResponse",
+    "PositionUpdate",
+    "PositionResponse",
+    "SignalCreate",
+    "SignalResponse",
+    "AccountStatsResponse",
+    "DailyStatsResponse",
+    "EquityCurvePoint",
+    "PaginatedResponse",
+    "FeishuConfirmRequest",
+])
+
 
 class PositionSide(str, enum.Enum):
     LONG = "long"
@@ -145,6 +196,7 @@ class Signal(Base):
     entry_price = Column(Float, nullable=True)
     stop_loss = Column(Float, nullable=True)
     take_profit = Column(Float, nullable=True)
+    quantity = Column(Float, nullable=True)
     status = Column(String(20), nullable=False, default="pending")
     created_at = Column(DateTime, default=_utcnow)
     confirmed_at = Column(DateTime, nullable=True)
@@ -180,174 +232,3 @@ class DailyStats(Base):
         UniqueConstraint("account_id", "date", name="uq_account_date"),
         Index("idx_stats_account", "account_id"),
     )
-
-
-# ==================== Pydantic Models ====================
-
-class AccountCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    initial_balance: float = Field(..., gt=0)
-    leverage: int = Field(default=10, ge=1, le=125)
-
-
-class AccountUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    leverage: Optional[int] = Field(None, ge=1, le=125)
-
-
-class AccountResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    name: str
-    initial_balance: float
-    balance: float
-    frozen_margin: float
-    available_balance: float
-    total_pnl: float
-    total_pnl_pct: float
-    leverage: int
-    created_at: datetime
-    updated_at: datetime
-
-
-class PositionUpdate(BaseModel):
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
-
-
-class PositionResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    account_id: str
-    symbol: str
-    side: str
-    quantity: float
-    entry_price: float
-    current_price: float
-    unrealized_pnl: float
-    unrealized_pnl_pct: float
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
-    opened_at: datetime
-    updated_at: datetime
-
-
-class OrderCreate(BaseModel):
-    account_id: str
-    symbol: str = Field(..., min_length=1)
-    side: str = Field(..., pattern="^(buy|sell)$")
-    position_side: Optional[str] = Field(None, pattern="^(long|short)$")
-    order_type: str = Field(default="market", pattern="^(market|limit)$")
-    quantity: float = Field(..., gt=0)
-    price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
-    source: str = Field(default="manual", pattern="^(manual|feishu|analyzer)$")
-    signal_id: Optional[str] = None
-    reason: Optional[str] = None
-    position_id: Optional[str] = None
-
-
-class OrderResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    account_id: str
-    symbol: str
-    side: str
-    position_side: Optional[str]
-    order_type: str
-    quantity: float
-    price: Optional[float]
-    filled_price: Optional[float]
-    status: str
-    position_id: Optional[str]
-    signal_id: Optional[str]
-    fee: float
-    pnl: Optional[float]
-    source: str
-    reason: Optional[str]
-    created_at: datetime
-    filled_at: Optional[datetime]
-
-
-class SignalCreate(BaseModel):
-    symbol: str
-    timeframe: Optional[str] = None
-    signal_type: str
-    reason: Optional[str] = None
-    entry_price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
-
-
-class SignalResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    symbol: str
-    timeframe: Optional[str]
-    signal_type: str
-    reason: Optional[str]
-    entry_price: Optional[float]
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
-    status: SignalStatus
-    created_at: datetime
-    confirmed_at: Optional[datetime]
-
-
-class DailyStatsResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    account_id: str
-    date: str
-    opening_balance: float
-    closing_balance: float
-    daily_pnl: float
-    daily_pnl_pct: float
-    trade_count: int
-    win_count: int
-    lose_count: int
-    largest_win: float
-    largest_loss: float
-    win_rate: float
-
-
-class AccountStatsResponse(BaseModel):
-    total_trades: int
-    winning_trades: int
-    losing_trades: int
-    win_rate: float
-    total_pnl: float
-    total_pnl_pct: float
-    avg_win: float
-    avg_loss: float
-    profit_factor: float
-    largest_win: float
-    largest_loss: float
-    current_positions: int
-    open_position_pnl: float
-
-
-class EquityCurvePoint(BaseModel):
-    date: str
-    balance: float
-    daily_pnl: float
-
-
-class FeishuConfirmRequest(BaseModel):
-    signal_id: str
-    action: str = Field(..., pattern="^(confirm|reject)$")
-    account_id: Optional[str] = None
-
-
-class PaginatedResponse(BaseModel):
-    items: list
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
