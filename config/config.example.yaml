@@ -1,11 +1,13 @@
 # 运行模式: monitor (监控交易) / analyzer (市场分析)
 run_mode: monitor
 
-# 币安API配置
-binance:
+# 交易所配置
+exchange:
+  api_client: binance
   api_key: your_binance_api_key
   api_secret: your_binance_api_secret
   testnet: true
+  mode: futures  # spot, futures, swap
   # 代理配置（可选，国内访问币安需要代理）
   proxy:
     http: ""

@@ -8,7 +8,7 @@ from typing import Optional, List, Any
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paper_trading.database import get_session
+from paper_trading.database import get_session, _utcnow
 from paper_trading.models import (
     PaperAccount, Position, Order, Signal, DailyStats,
     OrderStatus, SignalStatus
@@ -34,7 +34,7 @@ async def _update_by_id(
             if hasattr(obj, key) and value is not None:
                 setattr(obj, key, value)
         if hasattr(obj, "updated_at"):
-            obj.updated_at = datetime.utcnow()
+            obj.updated_at = _utcnow()
         await session.commit()
         await session.refresh(obj)
         return obj
@@ -155,6 +155,15 @@ async def delete_position(position_id: str) -> bool:
         position = result.scalar_one_or_none()
         if not position:
             return False
+
+        # 清除关联订单的 position_id 引用，避免外键约束冲突
+        orders_result = await session.execute(
+            select(Order).where(Order.position_id == position_id)
+        )
+        for order in orders_result.scalars().all():
+            order.position_id = None
+        await session.flush()
+
         await session.delete(position)
         await session.commit()
         return True
@@ -417,13 +426,22 @@ async def get_account_trade_stats(account_id: str) -> dict:
         total_wins = sum(o.pnl for o in winning)
         total_losses = abs(sum(o.pnl for o in losing)) if losing else 0
 
+        # 获取账户初始余额以计算正确的收益率百分比
+        account_initial_balance = 0.0
+        if orders:
+            acct_r = await session.execute(
+                select(PaperAccount).where(PaperAccount.id == orders[0].account_id)
+            )
+            acct = acct_r.scalar_one_or_none()
+            account_initial_balance = acct.initial_balance if acct else 0.0
+
         return {
             "total_trades": len(orders),
             "winning_trades": len(winning),
             "losing_trades": len(losing),
             "win_rate": len(winning) / len(orders) if orders else 0.0,
             "total_pnl": total_pnl,
-            "total_pnl_pct": total_pnl / orders[0].price * 100 if orders and orders[0].price else 0.0,
+            "total_pnl_pct": total_pnl / account_initial_balance * 100 if account_initial_balance else 0.0,
             "avg_win": total_wins / len(winning) if winning else 0.0,
             "avg_loss": total_losses / len(losing) if losing else 0.0,
             "profit_factor": total_wins / total_losses if total_losses > 0 else 0.0,

@@ -218,7 +218,6 @@ class MarketAnalyzerRunner:
                 self.notifiers['dingtalk'].send_text(summary)
                 for symbol, result in analysis_results.items():
                     if result:
-                        trend = self._detect_trend(result)
                         self.notifiers['dingtalk'].send_text(
                             f"\n--- {symbol} 分析 ---\n{result}"
                         )

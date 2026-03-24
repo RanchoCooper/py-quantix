@@ -3,7 +3,7 @@
 复用现有 notifications/feishu.py 的 webhook 能力
 """
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -104,8 +104,8 @@ class FeishuOrderIntegration:
                                f"**方向:** {side_emoji} {side_text}\n"
                                f"**数量:** {quantity}\n"
                                f"**入场价:** ${entry_price:,.2f}\n"
-                               f"**止损价:** ${stop_loss:,.2f}\n"
-                               f"**止盈价:** ${take_profit:,.2f}\n"
+                               f"{f'**止损价:** ${stop_loss:,.2f}\n' if stop_loss is not None else ''}"
+                               f"{f'**止盈价:** ${take_profit:,.2f}\n' if take_profit is not None else ''}"
                                f"**信号ID:** `{signal_id}`\n"
                                f"**时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 },
@@ -214,7 +214,7 @@ class FeishuOrderIntegration:
             await storage.update_signal(
                 signal_id,
                 status="confirmed",
-                confirmed_at=datetime.utcnow(),
+                confirmed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             return {
                 "success": True,
@@ -225,7 +225,7 @@ class FeishuOrderIntegration:
             await storage.update_signal(
                 signal_id,
                 status="rejected",
-                confirmed_at=datetime.utcnow(),
+                confirmed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             return {
                 "success": True,

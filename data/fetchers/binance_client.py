@@ -87,19 +87,23 @@ class BinanceClient:
 
         # 测试网络配置
         if self.testnet:
-            # Binance Testnet 使用不同的端点
-            testnet_api_key = exchange_config.api_key or "testnet_api_key"
-            testnet_api_secret = exchange_config.api_secret or "testnet_api_secret"
-
-            # 注意：python-binance 官方 Testnet 已弃用
-            # 使用主网但通过配置自定义 URL
-            client = Client(testnet_api_key, testnet_api_secret, testnet=True, requests_params=requests_params)
+            if not exchange_config.api_key or not exchange_config.api_secret:
+                raise ValueError(
+                    "Binance API credentials are required. "
+                    "Set EXCHANGE_API_KEY and EXCHANGE_API_SECRET environment variables."
+                )
+            client = Client(exchange_config.api_key, exchange_config.api_secret, testnet=True, requests_params=requests_params)
             logger.warning(
                 "Binance Testnet 已迁移到新端点。"
                 "如需使用测试环境，请配置 TESTNET=true 使用主网数据或自行搭建本地测试网。"
             )
         else:
             # 主网配置
+            if not exchange_config.api_key or not exchange_config.api_secret:
+                raise ValueError(
+                    "Binance API credentials are required. "
+                    "Set EXCHANGE_API_KEY and EXCHANGE_API_SECRET environment variables."
+                )
             client = Client(
                 exchange_config.api_key,
                 exchange_config.api_secret,

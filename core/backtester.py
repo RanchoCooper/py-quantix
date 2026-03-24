@@ -128,6 +128,11 @@ class Backtester:
         Returns:
             回测结果字典
         """
+        if initial_capital <= 0:
+            raise ValueError(f"initial_capital must be positive, got {initial_capital}")
+        if data.empty:
+            raise ValueError("data cannot be empty")
+
         capital = initial_capital
         position = 0.0
         trades: list = []

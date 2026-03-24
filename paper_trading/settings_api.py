@@ -207,10 +207,8 @@ def _load_from_config() -> AppSettings:
         if b:
             if getattr(b, "api_key", None):
                 binance.api_key_configured = True
-                _stored_secrets["binance_api_key"] = b.api_key
             if getattr(b, "api_secret", None):
                 binance.api_secret_configured = True
-                _stored_secrets["binance_api_secret"] = b.api_secret
 
         # 交易配置
         t = getattr(cfg, "trading", None)
@@ -277,7 +275,6 @@ def _load_from_config() -> AppSettings:
             llm.enabled = cfg.llm.enabled or False
             if cfg.llm.api_key:
                 llm.api_key_configured = True
-                _stored_secrets["llm_api_key"] = cfg.llm.api_key
             if cfg.llm.base_url:
                 llm.base_url = cfg.llm.base_url
             if cfg.llm.model:
@@ -338,10 +335,6 @@ def _merge_settings(base: AppSettings, overrides: Dict[str, Any]) -> AppSettings
         target = getattr(result, category)
         if isinstance(target, BaseModel):
             for key, value in values.items():
-                # 敏感信息特殊处理：存储到 _stored_secrets
-                if key in ("api_key", "api_secret") and value:
-                    _stored_secrets[f"{category}_{key}"] = value
-                    continue
                 if value is not None and hasattr(target, key):
                     setattr(target, key, value)
 

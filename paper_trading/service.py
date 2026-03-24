@@ -100,10 +100,12 @@ class PaperTradingService:
         self,
         position_id: str,
         exit_price: float,
+        quantity: Optional[float] = None,
     ) -> Dict[str, Any]:
         return await self.engine.close_position(
             position_id=position_id,
             exit_price=exit_price,
+            quantity=quantity,
         )
 
     async def update_position_prices(
@@ -211,6 +213,9 @@ class PaperTradingService:
             return {"success": False, "error": "飞书集成未初始化"}
 
         if not result["success"]:
+            # 信号状态异常时仍应更新信号状态
+            if signal.status.value == "pending":
+                await storage.update_signal(signal_id, status="rejected")
             return result
 
         if result["action"] == "confirmed":

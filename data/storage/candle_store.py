@@ -37,6 +37,14 @@ class CandleStore:
 
         logger.info(f"CandleStore initialized with path: {data_path}, max_candles: {max_candles}")
 
+    def _ensure_cache(self, symbol: str, timeframe: str) -> deque:
+        """确保缓存结构存在并返回对应 deque"""
+        if symbol not in self._cache:
+            self._cache[symbol] = {}
+        if timeframe not in self._cache[symbol]:
+            self._cache[symbol][timeframe] = deque(maxlen=self.max_candles)
+        return self._cache[symbol][timeframe]
+
     def add_candle(self, symbol: str, timeframe: str, candle: List):
         """
         添加一根K线
@@ -47,13 +55,7 @@ class CandleStore:
             candle: K线数据 [timestamp, open, high, low, close, volume]
         """
         with self._lock:
-            if symbol not in self._cache:
-                self._cache[symbol] = {}
-
-            if timeframe not in self._cache[symbol]:
-                self._cache[symbol][timeframe] = deque(maxlen=self.max_candles)
-
-            candles = self._cache[symbol][timeframe]
+            candles = self._ensure_cache(symbol, timeframe)
 
             # 避免重复添加
             if candles and candles[-1][0] == candle[0]:
@@ -71,13 +73,7 @@ class CandleStore:
             candles: K线数据列表
         """
         with self._lock:
-            if symbol not in self._cache:
-                self._cache[symbol] = {}
-
-            if timeframe not in self._cache[symbol]:
-                self._cache[symbol][timeframe] = deque(maxlen=self.max_candles)
-
-            candles_deque = self._cache[symbol][timeframe]
+            candles_deque = self._ensure_cache(symbol, timeframe)
 
             for candle in candles:
                 if candles_deque and candles_deque[-1][0] == candle[0]:
@@ -154,7 +150,7 @@ class CandleStore:
         )
 
         df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
-        df.set_index("datetime", inplace=True)
+        df = df.set_index("datetime")
 
         return df
 
@@ -284,11 +280,14 @@ class CandleStore:
     def save_all(self):
         """保存所有数据到文件"""
         with self._lock:
-            symbols = list(self._cache.keys())
+            items = [
+                (symbol, timeframe, list(self._cache[symbol][timeframe]))
+                for symbol in self._cache
+                for timeframe in self._cache[symbol]
+            ]
 
-        for symbol in symbols:
-            for timeframe in self._cache.get(symbol, {}).keys():
-                self.save_to_file(symbol, timeframe)
+        for symbol, timeframe, _ in items:
+            self.save_to_file(symbol, timeframe)
 
     def __repr__(self):
         return f"CandleStore(path={self.data_path}, cached_symbols={len(self._cache)})"

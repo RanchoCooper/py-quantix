@@ -131,14 +131,10 @@ def calculate_rsi(
         avg_loss.iloc[i] = (avg_loss.iloc[i - 1] * (period - 1) + loss.iloc[i]) / period
 
     # 计算 RS 和 RSI
-    rs = avg_gain / avg_loss.replace(0, float('inf'))
+    rs = avg_gain / avg_loss.replace(0, 1e-10)
     df['rsi'] = 100 - (100 / (1 + rs))
+    df['rsi'] = df['rsi'].clip(0, 100)
 
-    if drop_columns:
-        # 只删除我们创建的中间列
-        for col in ['delta', 'gain', 'loss']:
-            if col in df.columns:
-                df = df.drop(columns=[col])
 
     return df
 

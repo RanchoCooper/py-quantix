@@ -362,8 +362,8 @@ class PaperTradingEngine:
                 "trade_count": prev_count + 1,
                 "win_count": prev_wins + win,
                 "lose_count": prev_losses + lose,
-                "largest_win": max(pnl, 0),
-                "largest_loss": min(pnl, 0),
+                "largest_win": max(existing.largest_win if existing and existing.largest_win > 0 else 0, pnl) if pnl > 0 else (existing.largest_win if existing else 0),
+                "largest_loss": min(existing.largest_loss if existing and existing.largest_loss < 0 else 0, pnl) if pnl < 0 else (existing.largest_loss if existing else 0),
                 "win_rate": (prev_wins + win) / (prev_count + 1) if (prev_count + 1) > 0 else 0.0,
             },
         )

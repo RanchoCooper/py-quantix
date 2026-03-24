@@ -21,6 +21,12 @@ _engine = None
 _session_factory = None
 
 
+def _utcnow():
+    """返回当前 UTC 时间（naive datetime，替代已弃用的 datetime.utcnow()）"""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class Base(DeclarativeBase):
     pass
 

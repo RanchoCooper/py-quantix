@@ -14,7 +14,7 @@ class ProxyConfig(BaseSettings):
     http: str = ""
     https: str = ""
 
-    model_config = SettingsConfigDict(env_prefix="PROXY_")
+    model_config = SettingsConfigDict(env_prefix="PROXY_", extra="ignore")
 
 
 class ExchangeConfig(BaseSettings):
@@ -22,10 +22,10 @@ class ExchangeConfig(BaseSettings):
     # 交易所名称: binance, okx, bybit 等
     exchange: str = "binance"
 
-    # API密钥
-    api_key: str = Field(default="", validation_alias="EXCHANGE_API_KEY")
-    api_secret: str = Field(default="", validation_alias="EXCHANGE_API_SECRET")
-    passphrase: str = Field(default="", validation_alias="EXCHANGE_PASSPHRASE")
+    # API密钥（通过 EXCHANGE_API_KEY / EXCHANGE_API_SECRET / EXCHANGE_PASSPHRASE 环境变量覆盖）
+    api_key: str = ""
+    api_secret: str = ""
+    passphrase: str = ""
 
     # 交易模式: spot, futures, swap
     mode: str = "futures"
@@ -45,7 +45,7 @@ class ExchangeConfig(BaseSettings):
     # 交易手续费返佣ID
     rebate_id: str = ""
 
-    model_config = SettingsConfigDict(env_prefix="EXCHANGE_")
+    model_config = SettingsConfigDict(env_prefix="EXCHANGE_", extra="ignore")
 
 
 class SymbolConfig(BaseSettings):
@@ -55,6 +55,8 @@ class SymbolConfig(BaseSettings):
     position_size: float = 0.001
     strategy: str = "trend_following"
     strategy_params: Dict[str, Any] = {}
+
+    model_config = SettingsConfigDict(env_prefix="SYMBOL_", extra="ignore")
 
 
 class TradingConfig(BaseSettings):
@@ -81,7 +83,7 @@ class TradingConfig(BaseSettings):
     # 信号输出方式
     signal_output: List[str] = ["console"]
 
-    model_config = SettingsConfigDict(env_prefix="TRADING_")
+    model_config = SettingsConfigDict(env_prefix="TRADING_", extra="ignore")
 
 
 class DataConfig(BaseSettings):
@@ -101,7 +103,7 @@ class DataConfig(BaseSettings):
     # 获取数量
     limit: int = 100
 
-    model_config = SettingsConfigDict(env_prefix="DATA_")
+    model_config = SettingsConfigDict(env_prefix="DATA_", extra="ignore")
 
 
 class NetworkConfig(BaseSettings):
@@ -117,7 +119,7 @@ class NetworkConfig(BaseSettings):
     # 超时配置
     timeout: int = 30  # 请求超时（秒）
 
-    model_config = SettingsConfigDict(env_prefix="NETWORK_")
+    model_config = SettingsConfigDict(env_prefix="NETWORK_", extra="ignore")
 
 
 class BacktestConfig(BaseSettings):
@@ -135,7 +137,7 @@ class BacktestConfig(BaseSettings):
     # 滑点
     slippage: float = 0.0005
 
-    model_config = SettingsConfigDict(env_prefix="BACKTEST_")
+    model_config = SettingsConfigDict(env_prefix="BACKTEST_", extra="ignore")
 
 
 class DingtalkConfig(BaseSettings):
@@ -143,7 +145,7 @@ class DingtalkConfig(BaseSettings):
     webhook_url: str = ""
     secret: str = ""
 
-    model_config = SettingsConfigDict(env_prefix="DINGTALK_")
+    model_config = SettingsConfigDict(env_prefix="DINGTALK_", extra="ignore")
 
 
 class FeishuConfig(BaseSettings):
@@ -170,7 +172,7 @@ class NotificationConfig(BaseSettings):
     notify_on_error: bool = True
     notify_on_daily: bool = True
 
-    model_config = SettingsConfigDict(env_prefix="NOTIFY_")
+    model_config = SettingsConfigDict(env_prefix="NOTIFY_", extra="ignore")
 
 
 class LLMConfig(BaseSettings):
@@ -182,7 +184,7 @@ class LLMConfig(BaseSettings):
     style: str = "基本面+技术面"
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
 
-    model_config = SettingsConfigDict(env_prefix="LLM_")
+    model_config = SettingsConfigDict(env_prefix="LLM_", extra="ignore")
 
 
 class LogConfig(BaseSettings):
@@ -193,7 +195,7 @@ class LogConfig(BaseSettings):
     max_bytes: int = 10 * 1024 * 1024
     backup_count: int = 5
 
-    model_config = SettingsConfigDict(env_prefix="LOG_")
+    model_config = SettingsConfigDict(env_prefix="LOG_", extra="ignore")
 
 
 class StrategyConfig(BaseSettings):
@@ -202,7 +204,7 @@ class StrategyConfig(BaseSettings):
     mean_reversion: Dict[str, Any] = {"period": 20, "std_dev_multiplier": 2}
     turtle_trading: Dict[str, Any] = {"entry_period": 20, "exit_period": 10}
 
-    model_config = SettingsConfigDict(env_prefix="STRATEGY_")
+    model_config = SettingsConfigDict(env_prefix="STRATEGY_", extra="ignore")
 
 
 class Settings(BaseSettings):
@@ -252,7 +254,11 @@ class Settings(BaseSettings):
 
     @classmethod
     def from_yaml(cls, config_path: str) -> "Settings":
-        """从 YAML 配置文件加载"""
+        """
+        从 YAML 配置文件加载。
+
+        环境变量优先于 YAML 配置（支持 EXCHANGE_API_KEY, EXCHANGE_API_SECRET 等覆盖）。
+        """
         import yaml
         from pathlib import Path
 
@@ -263,7 +269,81 @@ class Settings(BaseSettings):
         with open(path, "r", encoding="utf-8") as f:
             config_data = yaml.safe_load(f)
 
-        return cls(**config_data)
+        # 先用 env vars 初始化（优先级高于 YAML）
+        instance = cls()
+
+        # 再用 YAML 值覆盖（非凭证字段优先使用 YAML）
+        if config_data:
+            instance._apply_yaml(config_data)
+
+        return instance
+
+    def _apply_yaml(self, data: Dict[str, Any]) -> None:
+        """
+        将 YAML 配置应用到实例。
+
+        对于嵌套的 BaseSettings 子类字段（如 exchange.proxy），
+        使用 model_validate 正确构造子模型实例，而非 setattr 直接赋值
+        （后者在 BaseSettings 上不会触发 pydantic 验证，会导致嵌套字段
+        被保存为原始 dict 而非子模型对象）。
+        """
+        import os
+
+        for key, value in data.items():
+            if key == "exchange" and isinstance(value, dict):
+                secret_fields = {"api_key", "api_secret", "passphrase"}
+                env_prefix_map = {
+                    "api_key": "EXCHANGE_API_KEY",
+                    "api_secret": "EXCHANGE_API_SECRET",
+                    "passphrase": "EXCHANGE_PASSPHRASE",
+                }
+                if hasattr(self, key):
+                    nested = getattr(self, key)
+                    for field_name in secret_fields:
+                        env_var = env_prefix_map.get(field_name)
+                        yaml_val = value.get(field_name)
+                        current_val = getattr(nested, field_name, None)
+                        if (env_var and os.getenv(env_var)) or (not current_val and yaml_val):
+                            if hasattr(nested, field_name):
+                                setattr(nested, field_name, os.getenv(env_var) or yaml_val)
+                    for k, v in value.items():
+                        if k not in secret_fields and hasattr(nested, k):
+                            if k == "proxy" and isinstance(v, dict):
+                                # 正确构造 ProxyConfig 子模型实例
+                                proxy_instance = ProxyConfig.model_validate(v)
+                                setattr(nested, k, proxy_instance)
+                            else:
+                                setattr(nested, k, v)
+            elif key == "llm" and isinstance(value, dict):
+                if hasattr(self, key):
+                    nested = getattr(self, key)
+                    llm_env = os.getenv("LLM_API_KEY")
+                    for k, v in value.items():
+                        if k == "api_key" and llm_env:
+                            setattr(nested, k, llm_env)
+                        elif k == "proxy" and isinstance(v, dict):
+                            proxy_instance = ProxyConfig.model_validate(v)
+                            setattr(nested, k, proxy_instance)
+                        elif hasattr(nested, k):
+                            setattr(nested, k, v)
+            elif key == "notifications" and isinstance(value, dict):
+                if hasattr(self, key):
+                    nested = getattr(self, key)
+                    for sub_key, sub_data in value.items():
+                        if isinstance(sub_data, dict) and hasattr(nested, sub_key):
+                            sub_nested = getattr(nested, sub_key)
+                            for k, v in sub_data.items():
+                                if hasattr(sub_nested, k):
+                                    setattr(sub_nested, k, v)
+            elif key in ("strategies", "logging", "trading", "data", "backtest", "network", "market_data"):
+                if hasattr(self, key) and isinstance(value, dict):
+                    nested = getattr(self, key)
+                    for k, v in value.items():
+                        if hasattr(nested, k):
+                            setattr(nested, k, v)
+            else:
+                if hasattr(self, key):
+                    setattr(self, key, value)
 
 
 # 模块级缓存（用于向后兼容）

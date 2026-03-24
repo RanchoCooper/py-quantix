@@ -96,16 +96,15 @@ class ConfigManager:
                     return False
 
             # 验证币安配置
-            binance_config = config['binance']
-            if not isinstance(binance_config.get('api_key'), str) or len(binance_config['api_key']) == 0:
+            exchange_config = config['exchange']
+            if not isinstance(exchange_config.get('api_key'), str) or len(exchange_config['api_key']) == 0:
                 logger.error("无效的币安API密钥")
                 return False
-            if not isinstance(binance_config.get('api_secret'), str) or len(binance_config['api_secret']) == 0:
+            if not isinstance(exchange_config.get('api_secret'), str) or len(exchange_config['api_secret']) == 0:
                 logger.error("无效的币安API密钥")
                 return False
-            if 'testnet' not in binance_config:
+            if 'testnet' not in exchange_config:
                 logger.warning("未设置testnet字段，默认为True")
-                config['binance']['testnet'] = True
 
             # 验证交易配置
             trading_config = config['trading']

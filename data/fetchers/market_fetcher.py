@@ -257,14 +257,13 @@ class ExchangeClient:
             return self._binance_client.fetch_klines(symbols, timeframe, limit)
 
         # 使用 ccxt 客户端
-        return asyncio.run(self._fetch_symbols_impl(symbols, timeframe, limit, async_mode=False))
+        return asyncio.run(self._fetch_symbols_impl(symbols, timeframe, limit))
 
     async def _fetch_symbols_impl(
         self,
         symbols: List[str],
         timeframe: str,
         limit: int,
-        async_mode: bool = True
     ) -> Dict[str, List[List]]:
         """
         批量获取K线数据的内部实现
@@ -273,20 +272,14 @@ class ExchangeClient:
             symbols: 交易对列表
             timeframe: K线周期
             limit: 获取数量
-            async_mode: 是否使用异步获取
 
         Returns:
             {symbol: klines} 字典
         """
-        import time
-
         results: Dict[str, List[List]] = {}
         for symbol in symbols:
             try:
-                if async_mode:
-                    klines = await self.fetch_ohlcv(symbol, timeframe, limit)
-                else:
-                    klines = await self.fetch_ohlcv(symbol, timeframe, limit)
+                klines = await self.fetch_ohlcv(symbol, timeframe, limit)
                 if klines:
                     results[symbol] = klines
                 else:
@@ -294,7 +287,7 @@ class ExchangeClient:
             except Exception as e:
                 logger.warning(f"获取 {symbol} 数据失败: {e}")
 
-            time.sleep(0.2)  # 避免请求过快
+            time.sleep(0.2)
 
         logger.info(f"成功获取 {len(results)}/{len(symbols)} 个交易对的数据")
         return results
@@ -435,6 +428,12 @@ class ExchangeClient:
         Returns:
             订单信息
         """
+        # 参数校验
+        if side not in ("buy", "sell"):
+            raise ValueError(f"Invalid side: {side}. Must be 'buy' or 'sell'.")
+        if order_type not in ("market", "limit", "stop", "take_profit"):
+            raise ValueError(f"Invalid order_type: {order_type}.")
+
         # 使用 Binance 官方客户端
         if self._binance_client:
             return await self._binance_client.create_order(

@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from paper_trading.database import Base
+from paper_trading.database import Base, _utcnow
 
 
 # ==================== ORM Models ====================
@@ -69,8 +69,8 @@ class PaperAccount(Base):
     frozen_margin = Column(Float, nullable=False, default=0.0)
     total_pnl = Column(Float, nullable=False, default=0.0)
     leverage = Column(Integer, nullable=False, default=10)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     positions = relationship("Position", back_populates="account", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="account", cascade="all, delete-orphan")
@@ -91,8 +91,8 @@ class Position(Base):
     take_profit = Column(Float, nullable=True)
     unrealized_pnl = Column(Float, nullable=False, default=0.0)
     unrealized_pnl_pct = Column(Float, nullable=False, default=0.0)
-    opened_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    opened_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     account = relationship("PaperAccount", back_populates="positions")
 
@@ -121,7 +121,7 @@ class Order(Base):
     pnl = Column(Float, nullable=True)
     source = Column(String(20), nullable=False, default="manual")
     reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     filled_at = Column(DateTime, nullable=True)
 
     account = relationship("PaperAccount", back_populates="orders")
@@ -146,7 +146,7 @@ class Signal(Base):
     stop_loss = Column(Float, nullable=True)
     take_profit = Column(Float, nullable=True)
     status = Column(String(20), nullable=False, default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     confirmed_at = Column(DateTime, nullable=True)
 
     orders = relationship("Order")

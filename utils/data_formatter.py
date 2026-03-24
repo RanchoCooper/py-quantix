@@ -183,7 +183,10 @@ class DataFormatter:
             true_ranges.append(max(tr0, tr1, tr2))
 
         atr = sum(true_ranges) / VOLATILITY_PERIOD
-        return atr / klines[-1]['close'] * 100
+        last_close = klines[-1]['close']
+        if last_close == 0:
+            return 0.0
+        return atr / last_close * 100
 
     def _format_time(self, timestamp: int) -> str:
         """

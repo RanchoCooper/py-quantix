@@ -166,7 +166,16 @@ class TradeExecutor:
     ) -> bool:
         """下单"""
         try:
-            side = signal['action'].upper()
+            VALID_ACTIONS = {'buy', 'sell'}
+            action = signal.get('action', '').lower()
+            if action not in VALID_ACTIONS:
+                logger.error(f"Invalid action: {action}")
+                return False
+            if position_size <= 0:
+                logger.error(f"Invalid position size: {position_size}")
+                return False
+
+            side = action.upper()
 
             order = _run_async(
                 self.client.create_order(
