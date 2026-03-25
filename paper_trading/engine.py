@@ -8,7 +8,7 @@ from loguru import logger
 
 from paper_trading.config import PaperTradingConfig
 from paper_trading.calculations import calc_margin, calc_fee, calc_pnl
-from paper_trading.events import EventBus, get_event_bus
+from paper_trading.events import EventBus
 from paper_trading import storage
 
 
@@ -26,7 +26,7 @@ class PaperTradingEngine:
 
     def __init__(self, config: Optional[PaperTradingConfig] = None):
         self.config = config or PaperTradingConfig()
-        self._event_bus: EventBus = get_event_bus()
+        self._event_bus: EventBus = EventBus()
 
     def add_listener(self, handler):
         """注册事件监听器（用于 SSE 推送）"""
