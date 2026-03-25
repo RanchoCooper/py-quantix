@@ -1,6 +1,6 @@
 """
 Schemas 模块
-提取自 models.py 的 Pydantic DTO，保持向后兼容
+Pydantic DTO 定义
 """
 from paper_trading.schemas.account import AccountCreate, AccountUpdate, AccountResponse
 from paper_trading.schemas.order import OrderCreate, OrderResponse

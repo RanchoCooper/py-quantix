@@ -10,33 +10,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from loguru import logger
 
-# 尝试导入现有组件（分析器模块不一定存在时优雅降级）
-_analyzer_module = None
-_fetcher_module = None
-_formatter_module = None
-
-
-def _lazy_import():
-    """延迟导入核心分析模块"""
-    global _analyzer_module, _fetcher_module, _formatter_module
-    if _analyzer_module is None:
-        try:
-            import sys
-            import os
-            # 将项目根目录加入 path
-            root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            if root not in sys.path:
-                sys.path.insert(0, root)
-
-            from core.analyzer import MarketAnalyzer
-            from data.fetchers.market_fetcher import ExchangeClient
-            from utils.data_formatter import DataFormatter
-            _analyzer_module = MarketAnalyzer
-            _fetcher_module = ExchangeClient
-            _formatter_module = DataFormatter
-        except ImportError as e:
-            logger.warning(f"核心分析模块导入失败: {e}")
-            raise
+from llm.analyzer import MarketAnalyzer
+from exchange.factory import create_exchange_client
+from utils.data_formatter import DataFormatter
 
 
 # ==================== 请求/响应模型 ====================
@@ -113,7 +89,6 @@ def _get_formatter():
     """获取 DataFormatter 单例"""
     global _formatter
     if _formatter is None:
-        from utils.data_formatter import DataFormatter
         _formatter = DataFormatter()
     return _formatter
 
@@ -136,7 +111,6 @@ def _normalize_klines(raw: List) -> List[Dict]:
 def _calc_indicators(klines: List[Dict]) -> Dict[str, Any]:
     """计算简单技术指标"""
     indicators = _get_formatter()._calculate_indicators(klines)
-    # 添加 change_pct 和 latest_price
     if len(klines) >= 2:
         latest = klines[-1]
         prev = klines[-2]
@@ -153,37 +127,21 @@ def register_analyzer_routes(app: FastAPI):
     @app.get("/api/analyzer/config", response_model=LLMConfigResponse)
     async def get_llm_config():
         """获取 LLM 配置状态"""
-        try:
-            _lazy_import()
-            import os
-            api_key = os.getenv("MINIMAX_API_KEY", "")
-            base_url = os.getenv("MINIMAX_BASE_URL", "")
-            model = os.getenv("MODEL_NAME", "")
-            return LLMConfigResponse(
-                configured=bool(api_key),
-                model=model or None,
-                base_url=base_url or None,
-                style_options=["基本面+技术面", "纯技术面", "波段交易", "趋势跟踪", "均值回归"],
-            )
-        except ImportError:
-            return LLMConfigResponse(
-                configured=False,
-                style_options=["基本面+技术面", "纯技术面", "波段交易", "趋势跟踪", "均值回归"],
-            )
+        import os
+        api_key = os.getenv("MINIMAX_API_KEY", "")
+        base_url = os.getenv("MINIMAX_BASE_URL", "")
+        model = os.getenv("MODEL_NAME", "")
+        return LLMConfigResponse(
+            configured=bool(api_key),
+            model=model or None,
+            base_url=base_url or None,
+            style_options=["基本面+技术面", "纯技术面", "波段交易", "趋势跟踪", "均值回归"],
+        )
 
     @app.post("/api/analyzer/klines", response_model=List[SymbolKLineResponse])
     async def fetch_klines(req: KlineRequest):
-        """
-        获取 K 线数据（不经过 LLM 分析）
-
-        用于预览 K 线数据是否正确
-        """
-        try:
-            _lazy_import()
-        except ImportError:
-            raise HTTPException(status_code=503, detail="分析模块未安装，请检查 core/ 目录")
-
-        client = _fetcher_module(exchange_id="binance", testnet=True)
+        """获取 K 线数据（不经过 LLM 分析）"""
+        client = create_exchange_client(exchange_id="binance", testnet=True)
         results: List[SymbolKLineResponse] = []
 
         for symbol in req.symbols:
@@ -204,17 +162,7 @@ def register_analyzer_routes(app: FastAPI):
 
     @app.post("/api/analyzer/analyze", response_model=AnalysisResponse)
     async def analyze(req: AnalysisRequest):
-        """
-        执行 LLM 市场分析
-
-        完整流程：获取 K 线 → 格式化 → 调用 LLM → 返回结果
-        """
-        try:
-            _lazy_import()
-        except ImportError:
-            raise HTTPException(status_code=503, detail="分析模块未安装，请检查 core/ 目录")
-
-        # 初始化客户端
+        """执行 LLM 市场分析"""
         api_key = req.llm_api_key or ""
         if not api_key:
             import os
@@ -223,13 +171,13 @@ def register_analyzer_routes(app: FastAPI):
         if not api_key:
             raise HTTPException(status_code=400, detail="未配置 LLM API Key，请设置 MINIMAX_API_KEY 环境变量或传入 llm_api_key 参数")
 
-        analyzer = _analyzer_module(
+        analyzer = MarketAnalyzer(
             api_key=api_key,
             base_url=req.llm_base_url or None,
             model=req.llm_model or None,
         )
-        client = _fetcher_module(exchange_id="binance", testnet=True)
-        formatter = _formatter_module()
+        client = create_exchange_client(exchange_id="binance", testnet=True)
+        formatter = _get_formatter()
 
         results: List[AnalysisResult] = []
         errors: Dict[str, str] = {}

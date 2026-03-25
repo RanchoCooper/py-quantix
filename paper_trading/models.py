@@ -1,9 +1,6 @@
 """
 数据库模型 (ORM)
 SQLAlchemy 异步模型定义
-
-Pydantic DTO 已移至 paper_trading.schemas 模块。
-为保持向后兼容，以下 DTO 仍从此模块导出：
 """
 import enum
 from typing import Optional
@@ -32,7 +29,7 @@ __all__ = [
     "DailyStats",
 ]
 
-# 向后兼容：重新导出 schemas（原有的导入路径）
+# 导出 schemas
 from paper_trading.schemas import (
     AccountCreate,
     AccountUpdate,
