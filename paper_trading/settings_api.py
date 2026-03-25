@@ -156,9 +156,6 @@ _cached_base_settings: Optional[AppSettings] = None
 # 运行时覆盖设置（页面级别，高优先级）
 _runtime_overrides: Dict[str, Any] = {}
 
-# 存储敏感信息（永不序列化到缓存）
-_stored_secrets: Dict[str, str] = {}
-
 
 def _load_from_config() -> AppSettings:
     """从 config.yaml 加载默认设置（带缓存）"""
@@ -338,17 +335,6 @@ def _merge_settings(base: AppSettings, overrides: Dict[str, Any]) -> AppSettings
                 if value is not None and hasattr(target, key):
                     setattr(target, key, value)
 
-    # 补充敏感信息配置状态
-    result.binance.api_key_configured = bool(
-        _stored_secrets.get("binance_api_key") or getattr(base.binance, "api_key_configured", False)
-    )
-    result.binance.api_secret_configured = bool(
-        _stored_secrets.get("binance_api_secret") or getattr(base.binance, "api_secret_configured", False)
-    )
-    result.llm.api_key_configured = bool(
-        _stored_secrets.get("llm_api_key") or getattr(base.llm, "api_key_configured", False)
-    )
-
     return result
 
 
@@ -430,9 +416,8 @@ def register_settings_routes(app: FastAPI):
     @app.delete("/api/settings", response_model=AppSettings, tags=["设置"])
     async def reset_settings():
         """重置所有页面覆盖，恢复到 config.yaml 默认值"""
-        global _runtime_overrides, _stored_secrets
+        global _runtime_overrides
         _runtime_overrides.clear()
-        _stored_secrets.clear()
         return _load_from_config()
 
     @app.get("/api/settings/categories", tags=["设置"])

@@ -9,17 +9,13 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
-from core.analyzer_runner import MarketAnalyzerRunner
-from core.components import (
-    SignalProcessor,
-    TradeExecutor,
-    PositionManager,
-    NotificationManager,
-)
-from data.fetchers.market_fetcher import ExchangeClient
+from run.analyzer_runner import MarketAnalyzerRunner
+from signals import SignalProcessor, TradeExecutor, PositionManager
+from notifications.manager import NotificationManager
 from notifications.dingtalk import DingTalkNotifier
 from notifications.feishu import FeishuNotifier
-from utils.config_manager import ConfigManager
+from exchange.factory import create_exchange_client
+from config.settings import get_settings
 from utils.symbol_parser import parse_symbol_config
 
 
@@ -27,28 +23,17 @@ def create_engine(
     config_path: str = "config/config.yaml",
     run_mode: Optional[str] = None
 ) -> Optional[object]:
-    """
-    工厂函数：根据配置创建合适的引擎实例
-
-    Args:
-        config_path: 配置文件路径
-        run_mode: 运行模式，如果为 None 则从配置文件读取
-
-    Returns:
-        TradingEngine 或 MarketAnalyzerRunner 实例
-    """
+    """工厂函数：根据配置创建合适的引擎实例"""
     try:
-        config = ConfigManager.load_config(config_path)
+        settings = get_settings(config_path)
 
-        # 优先使用传入的 run_mode，否则从配置读取
-        actual_mode = run_mode if run_mode else config.get('run_mode', 'monitor')
+        actual_mode = run_mode if run_mode else settings.run_mode
         logger.info(f"检测到运行模式: {actual_mode}")
 
         if actual_mode == 'analyzer':
-            config['run_mode'] = actual_mode
-            return MarketAnalyzerRunner(config)
+            return MarketAnalyzerRunner.from_settings(settings)
         else:
-            return TradingEngine(config=config, mode='monitor')
+            return TradingEngine.from_settings(settings, mode='monitor')
 
     except Exception as e:
         logger.error(f"创建引擎失败: {e}")
@@ -72,27 +57,18 @@ class TradingEngine:
         config_path: str = "config/config.yaml",
         mode: str = "auto"
     ):
-        """
-        初始化交易引擎
-
-        Args:
-            config: 配置字典
-            config_path: 配置文件路径
-            mode: 运行模式
-        """
-        # 加载配置
         if config is None:
-            config = ConfigManager.load_config(config_path)
+            from config.settings import get_settings
+            settings = get_settings(config_path)
+            config = self._settings_to_dict(settings)
 
         self.config = config
         self.mode = mode
 
-        # 初始化组件
         self.client = self._init_client()
         self.strategies = self._init_strategies()
         self.notifiers = self._init_notifiers()
 
-        # 初始化各功能组件
         self.signal_processor = SignalProcessor(self.strategies, self.client)
         self.trade_executor = TradeExecutor(self.client, config)
         self.trade_executor.set_mode(mode)
@@ -101,15 +77,51 @@ class TradingEngine:
 
         logger.info(f"交易引擎初始化完成，运行模式: {mode}")
 
-    def _init_client(self) -> ExchangeClient:
+    @classmethod
+    def from_settings(cls, settings, mode: str = "auto"):
+        """从 Settings 对象创建引擎"""
+        config = cls._settings_to_dict(settings)
+        return cls(config=config, mode=mode)
+
+    @staticmethod
+    def _settings_to_dict(settings) -> Dict[str, Any]:
+        """将 Settings 对象转换为字典格式（兼容旧代码）"""
+        config = {}
+        # 提取 trading 配置
+        if hasattr(settings, 'trading'):
+            config['trading'] = {
+                'symbols': settings.trading.symbols,
+                'signal_output': settings.trading.signal_output,
+            }
+        # 提取 notifications 配置
+        if hasattr(settings, 'notifications'):
+            config['notifications'] = {
+                'dingtalk': {
+                    'webhook_url': settings.notifications.dingtalk.webhook_url,
+                    'secret': settings.notifications.dingtalk.secret,
+                } if hasattr(settings.notifications, 'dingtalk') else {},
+                'feishu': {
+                    'webhook_url': settings.notifications.feishu.webhook_url,
+                    'template_id': settings.notifications.feishu.template_id,
+                    'template_version': settings.notifications.feishu.template_version,
+                } if hasattr(settings.notifications, 'feishu') else {},
+            }
+        # 提取 strategies 配置
+        if hasattr(settings, 'strategies'):
+            config['strategies'] = {}
+            for k, v in settings.strategies.__dict__.items():
+                if not k.startswith('_'):
+                    config['strategies'][k] = v
+        return config
+
+    def _init_client(self):
         """初始化交易所客户端"""
-        binance_config = self.config.get('binance', {})
-        client = ExchangeClient(
+        exchange_config = self.config.get('exchange', self.config.get('binance', {}))
+        client = create_exchange_client(
             exchange_id="binance",
-            testnet=binance_config.get('testnet', True)
+            testnet=exchange_config.get('testnet', True)
         )
 
-        # 设置杠杆
         trading_config = self.config.get('trading', {})
         symbols_config = trading_config.get('symbols', [])
         symbol_list = parse_symbol_config(symbols_config)
@@ -136,13 +148,11 @@ class TradingEngine:
             symbol = item.get('symbol')
             strategy_name = item.get('strategy')
 
-            # 获取策略参数
             if 'strategy_params' in item:
                 strategy_config = item['strategy_params']
             else:
                 strategy_config = self.config.get('strategies', {}).get(strategy_name, {})
 
-            # 动态导入策略
             try:
                 module = importlib.import_module(f"strategies.{strategy_name}")
                 class_name_map = {
@@ -169,7 +179,6 @@ class TradingEngine:
         notifiers = {}
         notifications_config = self.config.get('notifications', {})
 
-        # 钉钉通知器
         if 'dingtalk' in notifications_config:
             config = notifications_config['dingtalk']
             if config.get('webhook_url'):
@@ -179,7 +188,6 @@ class TradingEngine:
                 )
                 logger.info("钉钉通知器已初始化")
 
-        # 飞书通知器
         if 'feishu' in notifications_config:
             config = notifications_config['feishu']
             if config.get('webhook_url'):
@@ -193,38 +201,30 @@ class TradingEngine:
         return notifiers
 
     def evaluate_strategy(self, symbol: str) -> Dict[str, Any]:
-        """评估指定交易对的策略"""
         return self.signal_processor.evaluate_strategy(symbol)
 
     def evaluate_all_strategies(self) -> Dict[str, Dict[str, Any]]:
-        """评估所有交易对的策略"""
         return self.signal_processor.evaluate_all_strategies()
 
     def run_once(self) -> bool:
-        """运行一次交易循环"""
         if len(self.strategies) == 1:
             symbol = next(iter(self.strategies.keys()))
             return self._run_once_for_symbol(symbol)
         return self._run_once_for_all_symbols()
 
     def _run_once_for_symbol(self, symbol: str) -> bool:
-        """为单个交易对运行交易循环"""
         try:
             signal = self.signal_processor.evaluate_strategy(symbol)
 
             if self.signal_processor.has_new_signal(symbol, signal):
                 logger.info(f"交易对 {symbol} 检测到新信号: {signal}")
 
-                # 发送通知
                 position_size = self.trade_executor.get_position_size(symbol)
                 self.notification_manager.send_signal_notification(
                     symbol, signal, position_size
                 )
 
-                # 执行交易
                 success = self.trade_executor.execute(symbol, signal)
-
-                # 更新信号状态
                 self.signal_processor.update_signal(symbol, signal)
 
                 return success
@@ -241,7 +241,6 @@ class TradingEngine:
             return False
 
     def _run_once_for_all_symbols(self) -> bool:
-        """为所有交易对运行交易循环"""
         success = True
         signals = self.signal_processor.evaluate_all_strategies()
 
@@ -250,17 +249,14 @@ class TradingEngine:
                 if self.signal_processor.has_new_signal(symbol, signal):
                     logger.info(f"交易对 {symbol} 检测到新信号: {signal}")
 
-                    # 发送通知
                     position_size = self.trade_executor.get_position_size(symbol)
                     self.notification_manager.send_signal_notification(
                         symbol, signal, position_size
                     )
 
-                    # 执行交易
                     trade_success = self.trade_executor.execute(symbol, signal)
                     success = success and trade_success
 
-                    # 更新信号状态
                     self.signal_processor.update_signal(symbol, signal)
                 else:
                     logger.debug(f"交易对 {symbol} 无新信号")

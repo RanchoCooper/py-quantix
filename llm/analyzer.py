@@ -13,7 +13,6 @@ from loguru import logger
 class MarketAnalyzer:
     """市场分析器 - 调用大模型分析K线数据"""
 
-    # 默认配置
     DEFAULT_BASE_URL = "https://api.minimax.chat/v1"
     DEFAULT_MODEL = "Claude Opus-4.6"
 
@@ -23,14 +22,6 @@ class MarketAnalyzer:
         base_url: str = None,
         model: str = None
     ):
-        """
-        初始化市场分析器
-
-        Args:
-            api_key: API密钥，默认从环境变量读取
-            base_url: API地址
-            model: 模型名称
-        """
         self.api_key = api_key or os.getenv("MINIMAX_API_KEY", "")
         self.base_url = base_url or os.getenv("MINIMAX_BASE_URL", self.DEFAULT_BASE_URL)
         self.model = model or os.getenv("MODEL_NAME", self.DEFAULT_MODEL)
@@ -42,17 +33,6 @@ class MarketAnalyzer:
         formatted_data: str,
         style: str = "基本面+技术面"
     ) -> Optional[str]:
-        """
-        调用大模型分析K线数据并预测走势
-
-        Args:
-            symbol: 交易对
-            formatted_data: 格式化后的K线数据
-            style: 分析风格
-
-        Returns:
-            分析报告文本，失败返回None
-        """
         if not self.api_key:
             logger.error("未配置 MINIMAX_API_KEY，请在配置文件的 llm.api_key 中设置，或设置环境变量 MINIMAX_API_KEY")
             return None
@@ -87,7 +67,6 @@ class MarketAnalyzer:
             logger.info(f"API 响应状态码: {response.status_code}")
             response.raise_for_status()
             result = response.json()
-            # 检查响应是否包含有效内容
             if result.get("choices"):
                 logger.info(f"API 响应成功，返回 {len(result.get('choices', []))} 个结果")
             else:
@@ -102,7 +81,6 @@ class MarketAnalyzer:
             return None
 
     def _build_system_prompt(self, style: str) -> str:
-        """构建系统提示词"""
         return f"""你是一位专业的数字货币量化交易分析师，擅长{style}分析。
 
 请根据提供的K线数据进行分析，预测未来走势。
@@ -116,7 +94,6 @@ class MarketAnalyzer:
 请用中文输出分析报告，结构清晰，结论明确。"""
 
     def _build_user_prompt(self, symbol: str, data: str) -> str:
-        """构建用户提示词"""
         return f"""请分析以下 {symbol} 的行情数据：
 
 {data}
@@ -129,7 +106,6 @@ class MarketAnalyzer:
 5. 风险提示"""
 
     def _parse_response(self, response: Dict) -> Optional[str]:
-        """解析API响应"""
         try:
             choices = response.get("choices", [])
             if choices and len(choices) > 0:
@@ -144,21 +120,9 @@ class MarketAnalyzer:
         symbols_data: Dict[str, str],
         style: str = "基本面+技术面"
     ) -> Dict[str, Optional[str]]:
-        """
-        批量分析多个交易对
-
-        Args:
-            symbols_data: {symbol: formatted_data} 字典
-            style: 分析风格
-
-        Returns:
-            {symbol: analysis_result} 字典
-        """
         results = {}
-
         for symbol, data in symbols_data.items():
             logger.info(f"正在分析 {symbol}...")
             result = self.analyze(symbol, data, style)
             results[symbol] = result
-
         return results

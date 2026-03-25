@@ -152,6 +152,8 @@ class FeishuConfig(BaseSettings):
     """飞书配置"""
     webhook_url: str = ""
     secret: str = ""
+    template_id: str = ""
+    template_version: str = ""
 
     model_config = SettingsConfigDict(env_prefix="FEISHU_", extra="ignore")
 
@@ -346,7 +348,7 @@ class Settings(BaseSettings):
                     setattr(self, key, value)
 
 
-# 模块级缓存（用于向后兼容）
+# 模块级缓存
 _settings_cache: Dict[str, Settings] = {}
 
 
@@ -392,5 +394,5 @@ def clear_settings_cache() -> None:
     _settings_cache.clear()
 
 
-# 向后兼容别名
+# 模块级单例
 settings: Optional[Settings] = None

@@ -31,36 +31,91 @@ py-quantix/
 ├── main.py                      # CLI 主程序入口
 ├── config/
 │   ├── config.example.yaml      # 配置示例
-│   └── settings.py              # Pydantic 配置管理
-├── core/
-│   ├── engine.py               # 交易引擎（工厂模式）
+│   └── settings.py             # Pydantic 配置管理
+│
+├── run/                        # 运行入口层
+│   ├── cli.py                  # CLI 入口点
+│   ├── engine.py               # 交易引擎
+│   ├── strategy_engine.py      # 策略引擎
 │   ├── analyzer_runner.py       # 市场分析运行器
-│   ├── analyzer.py             # LLM 分析模块
-│   └── components.py            # 交易引擎组件
-├── data/
-│   └── fetchers/
-│       ├── market_fetcher.py   # ccxt 数据获取
-│       └── binance_client.py   # Binance 官方 API
-├── strategies/
+│   ├── backtester.py           # 回测器
+│   └── components.py           # 组件层
+│
+├── llm/                        # LLM 分析层
+│   └── analyzer.py             # 市场分析器
+│
+├── exchange/                   # 交易所接口层
+│   ├── factory.py              # 客户端工厂
+│   ├── binance_client.py       # Binance 官方 API
+│   └── ccxt_client.py          # ccxt 封装
+│
+├── market/                     # 市场数据层
+│   └── candle_store.py         # K线数据存储
+│
+├── signals/                    # 信号处理层
+│   ├── processor.py            # 信号处理器
+│   ├── executor.py              # 交易执行器
+│   └── position_manager.py      # 仓位管理器
+│
+├── strategies/                 # 策略层
 │   ├── base_strategy.py        # 策略基类
 │   ├── trend_following.py      # 趋势跟踪
 │   ├── mean_reversion.py       # 均值回归
-│   └── turtle_trading.py        # 海龟交易
-├── notifications/
-│   ├── base.py                # 通知器基类
-│   ├── dingtalk.py             # 钉钉通知
-│   └── feishu.py               # 飞书通知
+│   └── turtle_trading.py       # 海龟交易
+│
+├── notifications/              # 通知层
+│   ├── base.py                 # 通知器基类
+│   ├── manager.py              # 通知管理器
+│   ├── dingtalk.py            # 钉钉通知
+│   └── feishu.py              # 飞书通知
+│
 ├── paper_trading/              # 模拟交易模块
 │   ├── api.py                  # FastAPI REST 接口
 │   ├── service.py              # 业务逻辑层
-│   ├── storage.py              # 数据库仓储层
+│   ├── storage.py              # 数据访问层
 │   ├── engine.py               # 模拟交易引擎
-│   └── feishu_integration.py   # 飞书订单确认集成
-└── utils/
-    ├── config_manager.py       # 配置管理
-    ├── data_formatter.py       # K线数据格式化
-    └── indicators.py           # 技术指标计算
+│   ├── models.py               # ORM 模型
+│   ├── database.py             # 数据库连接
+│   ├── calculations.py         # 纯计算函数
+│   ├── events.py               # 事件总线 (SSE)
+│   ├── analyzer.py             # LLM 分析端点
+│   ├── settings_api.py         # 设置管理 API
+│   ├── feishu_integration.py   # 飞书订单确认
+│   ├── config.py               # 模块配置
+│   ├── dependencies.py         # 依赖注入
+│   ├── routes/                 # API 路由
+│   │   ├── health.py
+│   │   ├── accounts.py
+│   │   ├── trading.py
+│   │   ├── signals.py
+│   │   └── events.py
+│   └── schemas/                # Pydantic DTO
+│       └── ...
+│
+├── utils/                      # 工具层
+│   ├── data_formatter.py       # K线数据格式化
+│   ├── indicators.py           # 技术指标计算
+│   ├── symbol_parser.py        # 交易对解析
+│   └── logger.py               # 日志设置
+│
+├── dashboard/                   # Vue 3 前端项目
+│   └── ...
+│
+└── data/                       # 数据目录
 ```
+
+### 架构分层说明
+
+| 层次 | 目录 | 说明 |
+|------|------|------|
+| 运行入口 | `run/` | CLI 引擎、分析器、回测器 |
+| LLM 层 | `llm/` | 大语言模型市场分析 |
+| 交易所层 | `exchange/` | 统一的交易所 API 封装 |
+| 市场层 | `market/` | K线数据存储和缓存 |
+| 信号层 | `signals/` | 信号处理、交易执行、仓位管理 |
+| 策略层 | `strategies/` | 交易策略实现 |
+| 通知层 | `notifications/` | 消息通知渠道 |
+| 模拟交易 | `paper_trading/` | 完整的模拟交易系统 |
 
 ## 快速开始
 
@@ -116,6 +171,9 @@ python main.py --mode monitor
 
 # LLM 市场分析模式
 python main.py --mode analyzer --once
+
+# 使用模块入口（推荐）
+python -m run.cli --mode monitor --once
 
 # 启动模拟交易 API
 python paper_trading_cli.py
@@ -262,6 +320,8 @@ npm run preview
 
 ```bash
 python main.py --help
+# 或
+python -m run.cli --help
 
 Options:
   --config CONFIG                配置文件路径
@@ -280,6 +340,15 @@ Options:
 | RSI | 相对强弱指数（Wilder 平滑） |
 | Bollinger | 布林带 |
 | Donchian | 唐奇安通道 |
+
+## 重构说明
+
+本项目采用分层模块化架构设计：
+
+1. **清晰的层次划分**：运行入口、LLM 分析、交易所接口、市场数据、信号处理、策略、通知七大模块
+2. **统一配置系统**：使用 Pydantic 配置管理
+3. **单一职责**：每个模块专注单一职责，高内聚低耦合
+4. **工厂模式**：交易所客户端通过工厂函数创建，支持多种实现
 
 ## 风险提示
 

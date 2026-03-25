@@ -3,15 +3,14 @@
 市场分析器运行器
 用于 analyzer 模式：获取K线数据 → 调用大模型分析 → 发送到消息渠道
 """
-
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from core.analyzer import MarketAnalyzer
-from data.fetchers.market_fetcher import ExchangeClient
+from llm.analyzer import MarketAnalyzer
+from exchange.factory import create_exchange_client
 from notifications.dingtalk import DingTalkNotifier
 from notifications.feishu import FeishuNotifier
 from utils.data_formatter import DataFormatter
@@ -30,64 +29,80 @@ class MarketAnalyzerRunner:
     """
 
     def __init__(self, config: Dict[str, Any]):
-        """
-        初始化分析运行器
-
-        Args:
-            config: 配置字典
-        """
         self.config = config
 
-        # 初始化K线数据获取器
         llm_config = config.get('llm', {})
-        binance_config = config.get('binance', {})
+        exchange_config = config.get('exchange', config.get('binance', {}))
 
-        # 使用统一客户端
-        self.market_client = ExchangeClient(
+        self.market_client = create_exchange_client(
             exchange_id="binance",
-            testnet=binance_config.get('testnet', True)
+            testnet=exchange_config.get('testnet', True)
         )
 
-        # 初始化格式化器
         self.formatter = DataFormatter()
 
-        # 初始化大模型分析器
         self.analyzer = MarketAnalyzer(
             api_key=llm_config.get('api_key'),
             base_url=llm_config.get('base_url'),
             model=llm_config.get('model')
         )
 
-        # K线配置
         self.market_config = config.get('market_data', {})
         self.interval = self.market_config.get('interval', '1h')
         self.limit = self.market_config.get('limit', 100)
 
-        # 从 trading 配置获取交易对列表
         trading_config = config.get('trading', {})
-
-        # 信号输出配置（优先从根级别读取，其次从 trading 配置读取）
         self.signal_output = config.get('signal_output', trading_config.get('signal_output', ['console']))
 
-        # 通知器
         self.notifiers = self._init_notifiers()
 
-        # 使用统一的符号解析函数
         symbols = trading_config.get('symbols', ['BTCUSDT'])
         self.symbols = get_symbol_list(symbols)
 
         logger.info(f"市场分析器初始化完成，分析交易对: {self.symbols}")
 
+    @classmethod
+    def from_settings(cls, settings):
+        """从 Settings 对象创建分析运行器"""
+        config = {
+            'llm': {
+                'api_key': settings.llm.api_key if hasattr(settings, 'llm') else '',
+                'base_url': settings.llm.base_url if hasattr(settings, 'llm') else '',
+                'model': settings.llm.model if hasattr(settings, 'llm') else '',
+            },
+            'exchange': {
+                'testnet': settings.exchange.testnet if hasattr(settings, 'exchange') else True,
+            },
+            'trading': {
+                'symbols': settings.trading.symbols if hasattr(settings, 'trading') else ['BTCUSDT'],
+                'signal_output': settings.trading.signal_output if hasattr(settings, 'trading') else ['console'],
+            },
+            'notifications': {
+                'dingtalk': {
+                    'webhook_url': settings.notifications.dingtalk.webhook_url if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'dingtalk') else '',
+                    'secret': settings.notifications.dingtalk.secret if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'dingtalk') else '',
+                },
+                'feishu': {
+                    'webhook_url': settings.notifications.feishu.webhook_url if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'feishu') else '',
+                    'template_id': settings.notifications.feishu.template_id if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'feishu') else '',
+                    'template_version': settings.notifications.feishu.template_version if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'feishu') else '',
+                },
+            },
+            'market_data': {
+                'interval': settings.data.default_timeframe if hasattr(settings, 'data') else '1h',
+                'limit': settings.data.limit if hasattr(settings, 'data') else 100,
+            },
+        }
+        return cls(config)
+
     def _init_notifiers(self) -> Dict[str, Any]:
         """初始化通知器"""
         notifiers = {}
         notifications_config = self.config.get('notifications', {})
-        # 已在类初始化时从正确位置读取 signal_output
         signal_output = self.signal_output
 
         logger.info(f"信号输出配置: {signal_output}")
 
-        # 钉钉通知器
         if 'dingtalk' in notifications_config:
             dingtalk_config = notifications_config['dingtalk']
             if dingtalk_config.get('webhook_url'):
@@ -97,7 +112,6 @@ class MarketAnalyzerRunner:
                 )
                 logger.info("钉钉通知器已初始化")
 
-        # 飞书通知器
         if 'feishu' in notifications_config:
             feishu_config = notifications_config['feishu']
             if feishu_config.get('webhook_url'):
@@ -111,22 +125,12 @@ class MarketAnalyzerRunner:
         return notifiers
 
     def run(self, send_notification: bool = True) -> Dict[str, Any]:
-        """
-        运行分析流程
-
-        Args:
-            send_notification: 是否发送通知
-
-        Returns:
-            分析结果字典
-        """
         logger.info("=" * 50)
         logger.info("开始市场分析流程")
         logger.info("=" * 50)
 
         results = {}
 
-        # 步骤1: 获取K线数据
         logger.info("步骤1: 获取K线数据...")
         klines_data = self.market_client.fetch_klines(
             self.symbols, self.interval, self.limit
@@ -138,7 +142,6 @@ class MarketAnalyzerRunner:
 
         logger.info(f"成功获取 {len(klines_data)} 个交易对的数据")
 
-        # 步骤2: 格式化数据
         logger.info("步骤2: 格式化数据...")
         formatted_data = {}
         for symbol, klines in klines_data.items():
@@ -156,24 +159,20 @@ class MarketAnalyzerRunner:
 
         logger.info(f"有效数据交易对: {list(formatted_data.keys())}")
 
-        # 步骤3: 调用大模型分析
         logger.info("步骤3: 调用大模型分析...")
         analysis_results = self.analyzer.analyze_multiple(formatted_data)
         logger.info(f"分析完成, 结果: {analysis_results}")
 
-        # 检查分析结果
         for symbol, result in analysis_results.items():
             if result:
                 logger.info(f"{symbol} 分析结果长度: {len(result)} 字符")
             else:
                 logger.warning(f"{symbol} 分析结果为空")
 
-        # 步骤4: 发送通知
         if send_notification and analysis_results:
             logger.info("步骤4: 发送通知...")
             self._send_notifications(analysis_results)
 
-        # 汇总结果
         results = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "symbols": self.symbols,
@@ -191,8 +190,6 @@ class MarketAnalyzerRunner:
 
     def _send_notifications(self, analysis_results: Dict[str, Optional[str]]):
         """发送分析结果到配置的消息渠道"""
-
-        # 构建汇总消息
         summary = "📊 量化分析报告\n"
         summary += f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
         summary += f"分析交易对: {', '.join(analysis_results.keys())}\n\n"
@@ -201,7 +198,6 @@ class MarketAnalyzerRunner:
             if result:
                 summary += f"• {symbol}: 分析完成\n"
 
-        # 按配置的输出方式发送
         for output in self.signal_output:
             if output == 'console':
                 logger.info("=" * 50)
@@ -248,12 +244,7 @@ class MarketAnalyzerRunner:
         return "neutral"
 
     def run_loop(self, interval_seconds: int = 3600):
-        """
-        循环运行分析
-
-        Args:
-            interval_seconds: 间隔秒数
-        """
+        """循环运行分析"""
         logger.info(f"开始循环分析，间隔: {interval_seconds}秒")
 
         while True:
@@ -266,21 +257,13 @@ class MarketAnalyzerRunner:
                 break
             except Exception as e:
                 logger.error(f"分析循环出错: {e}")
-                time.sleep(60)  # 出错后等待1分钟再重试
+                time.sleep(60)
 
 
-# 便捷函数
 def run_analyzer(config_path: str = "config/config.yaml"):
     """运行分析器的便捷函数"""
-    from utils.config_manager import ConfigManager
+    from config.settings import get_settings
 
-    config = ConfigManager.load_config(config_path)
-    if not ConfigManager.validate_config(config):
-        raise ValueError("配置验证失败")
-
-    runner = MarketAnalyzerRunner(config)
+    settings = get_settings(config_path)
+    runner = MarketAnalyzerRunner.from_settings(settings)
     runner.run()
-
-
-if __name__ == "__main__":
-    run_analyzer()

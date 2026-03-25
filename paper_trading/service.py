@@ -11,6 +11,7 @@ from paper_trading.config import PaperTradingConfig
 from paper_trading.engine import PaperTradingEngine
 from paper_trading.feishu_integration import get_feishu_integration
 from paper_trading.models import (
+    PaperAccount, Position, Order, Signal, DailyStats,
     AccountResponse, PositionResponse, OrderResponse,
     SignalResponse, DailyStatsResponse, AccountStatsResponse,
     EquityCurvePoint, PaginatedResponse,
@@ -214,7 +215,8 @@ class PaperTradingService:
 
         if not result["success"]:
             # 信号状态异常时仍应更新信号状态
-            if signal.status.value == "pending":
+            stale_signal = await storage.get_signal(signal_id)
+            if stale_signal and stale_signal.status.value == "pending":
                 await storage.update_signal(signal_id, status="rejected")
             return result
 
@@ -225,7 +227,7 @@ class PaperTradingService:
                 account_id=account_id or signal.account_id,
                 symbol=signal.symbol,
                 side=signal.signal_type,
-                quantity=signal.quantity if hasattr(signal, "quantity") else 0.01,
+                quantity=signal.quantity if signal.quantity is not None else 0.01,
                 entry_price=signal.entry_price,
                 stop_loss=signal.stop_loss,
                 take_profit=signal.take_profit,
@@ -337,7 +339,7 @@ class PaperTradingService:
 
     # ==================== 响应转换 ====================
 
-    def _account_to_response(self, account) -> AccountResponse:
+    def _account_to_response(self, account: PaperAccount) -> AccountResponse:
         available = account.balance - account.frozen_margin
         total_pnl = account.balance - account.initial_balance
         total_pnl_pct = (total_pnl / account.initial_balance * 100) if account.initial_balance > 0 else 0
@@ -355,14 +357,14 @@ class PaperTradingService:
             updated_at=account.updated_at,
         )
 
-    def _position_to_response(self, position) -> PositionResponse:
+    def _position_to_response(self, position: Position) -> PositionResponse:
         return PositionResponse.model_validate(position)
 
-    def _order_to_response(self, order) -> OrderResponse:
+    def _order_to_response(self, order: Order) -> OrderResponse:
         return OrderResponse.model_validate(order)
 
-    def _signal_to_response(self, signal) -> SignalResponse:
+    def _signal_to_response(self, signal: Signal) -> SignalResponse:
         return SignalResponse.model_validate(signal)
 
-    def _daily_stats_to_response(self, stats) -> DailyStatsResponse:
+    def _daily_stats_to_response(self, stats: DailyStats) -> DailyStatsResponse:
         return DailyStatsResponse.model_validate(stats)

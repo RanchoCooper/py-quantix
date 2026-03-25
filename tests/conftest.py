@@ -59,9 +59,10 @@ async def fresh_db():
     db_module._engine = test_engine
     db_module._session_factory = None  # 强制重新创建
 
-    # 重置 app_state
-    api_module.app_state["running"] = True
-    api_module.app_state["service"] = None
+    # 重置 app.state（运行时状态）
+    if hasattr(api_module.app, "state"):
+        api_module.app.state.running = True
+        api_module.app.state.service = None
 
     yield db_path
 

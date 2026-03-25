@@ -1,20 +1,6 @@
 #!/usr/bin/env python3
 """
-主程序入口，初始化交易引擎并启动交易循环
-
-支持多种运行模式：
-- monitor: 监控模式，只发送信号通知，不执行实际交易
-- auto: 自动模式，自动执行交易信号
-- analyzer: 分析模式，使用 LLM 分析市场数据
-
-配置选项：
-- 支持多币种交易配置
-- 支持多种交易策略选择
-- 支持钉钉通知或飞书两种信号输出方式
-- 支持灵活的风险管理设置（杠杆、仓位等）
-
-建议使用 run.cli 模块作为入口点：
-    python -m run.cli --help
+CLI 入口点
 """
 import argparse
 import sys
@@ -27,9 +13,6 @@ from utils.logger import setup_logger
 
 
 def main():
-    """
-    主函数
-    """
     parser = argparse.ArgumentParser(description="量化交易系统")
     parser.add_argument(
         "--config",

@@ -24,7 +24,17 @@ async def _update_by_id(
     id_: str,
     **kwargs: Any,
 ) -> Optional[Any]:
-    """通用单条记录更新：查询 -> 设置字段 -> 提交 -> 返回"""
+    """
+    通用单条记录更新：查询 -> 设置字段 -> 提交 -> 返回
+
+    Args:
+        model: SQLAlchemy 模型类
+        id_: 记录 ID
+        **kwargs: 要更新的字段名=值对
+
+    Returns:
+        更新后的模型实例，或 None（不存在时）
+    """
     async with get_session() as session:
         result = await session.execute(select(model).where(model.id == id_))
         obj = result.scalar_one_or_none()
