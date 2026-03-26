@@ -1,0 +1,143 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main, feat/**]
+  pull_request:
+  schedule:
+    # 每周一早上 9:00 UTC 运行代码质量检查
+    - cron: "0 9 * * 1"
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ============================================================
+  # Job 1: Pre-commit 检查
+  # ============================================================
+  pre-commit:
+    name: Pre-commit Hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Install pre-commit hooks
+        run: pre-commit install --install-hooks
+
+      - name: Run pre-commit on all files
+        run: pre-commit run --all-files
+
+      - name: Run pre-commit on changed files
+        if: github.event_name == 'pull_request'
+        run: pre-commit run --from-ref origin/${{ github.base_ref }} --to-ref ${{ github.head_ref }}
+
+  # ============================================================
+  # Job 2: 代码复杂度分析
+  # ============================================================
+  complexity:
+    name: Complexity Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install radon wily
+
+      - name: Run Radon complexity analysis
+        run: |
+          radon cc -a -i ".venv,tests" . || true
+        continue-on-error: true
+
+      - name: Run Wily complexity tracking
+        run: |
+          wily graph . --output wily-report || true
+          wily report . --metric loc --output wily-loc.txt || true
+        continue-on-error: true
+
+      - name: Upload complexity reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: complexity-reports
+          path: wily-loc.txt
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ============================================================
+  # Job 3: 依赖审计
+  # ============================================================
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: pip-audit -r requirements.txt --format=json --output=pip-audit.json || true
+        continue-on-error: true
+
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-report
+          path: pip-audit.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # ============================================================
+  # Job 4: 过期依赖检查
+  # ============================================================
+  outdated-deps:
+    name: Outdated Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Check outdated dependencies
+        run: pip install pipdate && pipdate --diff 2>&1 || true
+        continue-on-error: true
