@@ -85,26 +85,28 @@ class TradingEngine:
 
     @staticmethod
     def _settings_to_dict(settings) -> Dict[str, Any]:
-        """将 Settings 对象转换为字典格式（兼容旧代码）"""
+        """将 Settings 对象转换为字典格式"""
         config = {}
         # 提取 trading 配置
         if hasattr(settings, 'trading'):
             config['trading'] = {
-                'symbols': settings.trading.symbols,
-                'signal_output': settings.trading.signal_output,
+                'symbols': getattr(settings.trading, 'symbols', ['BTCUSDT']),
+                'signal_output': getattr(settings.trading, 'signal_output', ['console']),
             }
         # 提取 notifications 配置
         if hasattr(settings, 'notifications'):
+            feishu_config = getattr(settings.notifications, 'feishu', None)
+            dingtalk_config = getattr(settings.notifications, 'dingtalk', None)
             config['notifications'] = {
                 'dingtalk': {
-                    'webhook_url': settings.notifications.dingtalk.webhook_url,
-                    'secret': settings.notifications.dingtalk.secret,
-                } if hasattr(settings.notifications, 'dingtalk') else {},
+                    'webhook_url': getattr(dingtalk_config, 'webhook_url', '') if dingtalk_config else '',
+                    'secret': getattr(dingtalk_config, 'secret', '') if dingtalk_config else '',
+                },
                 'feishu': {
-                    'webhook_url': settings.notifications.feishu.webhook_url,
-                    'template_id': settings.notifications.feishu.template_id,
-                    'template_version': settings.notifications.feishu.template_version,
-                } if hasattr(settings.notifications, 'feishu') else {},
+                    'webhook_url': getattr(feishu_config, 'webhook_url', '') if feishu_config else '',
+                    'template_id': getattr(feishu_config, 'template_id', '') if feishu_config else '',
+                    'template_version': getattr(feishu_config, 'template_version', '') if feishu_config else '',
+                },
             }
         # 提取 strategies 配置
         if hasattr(settings, 'strategies'):

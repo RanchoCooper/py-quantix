@@ -66,31 +66,31 @@ class MarketAnalyzerRunner:
         """从 Settings 对象创建分析运行器"""
         config = {
             'llm': {
-                'api_key': settings.llm.api_key if hasattr(settings, 'llm') else '',
-                'base_url': settings.llm.base_url if hasattr(settings, 'llm') else '',
-                'model': settings.llm.model if hasattr(settings, 'llm') else '',
+                'api_key': getattr(settings.llm, 'api_key', '') if hasattr(settings, 'llm') else '',
+                'base_url': getattr(settings.llm, 'base_url', '') if hasattr(settings, 'llm') else '',
+                'model': getattr(settings.llm, 'model', '') if hasattr(settings, 'llm') else '',
             },
             'exchange': {
-                'testnet': settings.exchange.testnet if hasattr(settings, 'exchange') else True,
+                'testnet': getattr(settings.exchange, 'testnet', True) if hasattr(settings, 'exchange') else True,
             },
             'trading': {
-                'symbols': settings.trading.symbols if hasattr(settings, 'trading') else ['BTCUSDT'],
-                'signal_output': settings.trading.signal_output if hasattr(settings, 'trading') else ['console'],
+                'symbols': getattr(settings.trading, 'symbols', ['BTCUSDT']) if hasattr(settings, 'trading') else ['BTCUSDT'],
+                'signal_output': getattr(settings.trading, 'signal_output', ['console']) if hasattr(settings, 'trading') else ['console'],
             },
             'notifications': {
                 'dingtalk': {
-                    'webhook_url': settings.notifications.dingtalk.webhook_url if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'dingtalk') else '',
-                    'secret': settings.notifications.dingtalk.secret if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'dingtalk') else '',
+                    'webhook_url': getattr(settings.notifications, 'dingtalk', None) and getattr(settings.notifications.dingtalk, 'webhook_url', '') or '',
+                    'secret': getattr(settings.notifications, 'dingtalk', None) and getattr(settings.notifications.dingtalk, 'secret', '') or '',
                 },
                 'feishu': {
-                    'webhook_url': settings.notifications.feishu.webhook_url if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'feishu') else '',
-                    'template_id': settings.notifications.feishu.template_id if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'feishu') else '',
-                    'template_version': settings.notifications.feishu.template_version if hasattr(settings, 'notifications') and hasattr(settings.notifications, 'feishu') else '',
+                    'webhook_url': getattr(settings.notifications, 'feishu', None) and getattr(settings.notifications.feishu, 'webhook_url', '') or '',
+                    'template_id': getattr(settings.notifications, 'feishu', None) and getattr(settings.notifications.feishu, 'template_id', '') or '',
+                    'template_version': getattr(settings.notifications, 'feishu', None) and getattr(settings.notifications.feishu, 'template_version', '') or '',
                 },
             },
             'market_data': {
-                'interval': settings.data.default_timeframe if hasattr(settings, 'data') else '1h',
-                'limit': settings.data.limit if hasattr(settings, 'data') else 100,
+                'interval': getattr(settings.data, 'default_timeframe', '1h') if hasattr(settings, 'data') else '1h',
+                'limit': getattr(settings.data, 'limit', 100) if hasattr(settings, 'data') else 100,
             },
         }
         return cls(config)
@@ -161,7 +161,6 @@ class MarketAnalyzerRunner:
 
         logger.info("步骤3: 调用大模型分析...")
         analysis_results = self.analyzer.analyze_multiple(formatted_data)
-        logger.info(f"分析完成, 结果: {analysis_results}")
 
         for symbol, result in analysis_results.items():
             if result:
@@ -220,7 +219,6 @@ class MarketAnalyzerRunner:
 
             elif output == 'feishu' and 'feishu' in self.notifiers:
                 logger.info("准备发送飞书通知...")
-                logger.info(f"飞书 notifiers 存在: {'feishu' in self.notifiers}")
                 result1 = self.notifiers['feishu'].send_text(summary)
                 logger.info(f"飞书摘要发送结果: {result1}")
                 for symbol, result in analysis_results.items():
